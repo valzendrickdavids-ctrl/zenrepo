@@ -1,0 +1,7 @@
+[functions.login-notification]
+# JWTs are verified with getUser AND getClaims inside the function.
+verify_jwt = false
+
+[functions.username-login]
+# Public login endpoint; password validation and server-side rate limits are mandatory.
+verify_jwt = false
