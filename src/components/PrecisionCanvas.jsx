@@ -5,6 +5,18 @@ export default function PrecisionCanvas({ image, saved, brush, attempts, disable
  const callbacks=useRef({onChange,audio,disabled});callbacks.current={onChange,audio,disabled};
  if(!engine.current)engine.current=new BrushEngine(attempts,saved);
  const [status,setStatus]=useState('Ready to brush');
+ const dust=useRef(null),lastDust=useRef(0);
+ function scatterDust(x,y){
+  if(!dust.current||Date.now()-lastDust.current<45||window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  lastDust.current=Date.now();
+  for(let i=0;i<3;i++){
+   if(dust.current.childElementCount>=24)break;
+   const particle=document.createElement('i');
+   particle.className='scratch-dust';particle.style.left=`${x/WIDTH*100}%`;particle.style.top=`${y/HEIGHT*100}%`;
+   particle.style.setProperty('--dust-x',`${(i-1)*12}px`);particle.style.setProperty('--dust-y',`${-12-i*6}px`);
+   particle.addEventListener('animationend',()=>particle.remove(),{once:true});dust.current.appendChild(particle);
+  }
+ }
  function paint(ctx){
   ctx.fillStyle='#264b70';ctx.fillRect(0,0,WIDTH,HEIGHT);ctx.fillStyle='#365f85';
   for(let y=0;y<HEIGHT;y+=24)for(let x=0;x<WIDTH;x+=24){ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();}
@@ -40,11 +52,11 @@ export default function PrecisionCanvas({ image, saved, brush, attempts, disable
   const added=engine.current.move(pointer,x,y,brush,Date.now()),ctx=canvas.current.getContext('2d');
   added.forEach(n=>ctx.clearRect(n%COLS*CELL,Math.floor(n/COLS)*CELL,CELL,CELL));
   if(engine.current.stroke.size===STROKE_LIMIT){setStatus('7% reached — release to recover');callbacks.current.audio.stopScratch();}
-  if(added.length)publish();
+  if(added.length){scatterDust(x,y);publish();}
  }
  function point(e){const r=canvas.current.getBoundingClientRect();return [(e.clientX-r.left)*WIDTH/r.width,(e.clientY-r.top)*HEIGHT/r.height];}
  return <><div className="scratch-board">
-  <img src={image} alt={disabled?'Revealed IT illustration':'Hidden visual clue'} draggable="false"/>
+  <img src={image} alt={disabled?'Revealed visual clue':'Hidden visual clue'} draggable="false"/>
   <canvas ref={canvas} width={WIDTH} height={HEIGHT} hidden={disabled} tabIndex={disabled?-1:0}
    aria-label="Scratch clue. Hold and release Space for one brush attempt, or drag with mouse or touch."
    onPointerDown={e=>{if(e.button!==0||!start(e.pointerId))return;e.currentTarget.setPointerCapture(e.pointerId);move(e.pointerId,...point(e));}}
@@ -54,6 +66,7 @@ export default function PrecisionCanvas({ image, saved, brush, attempts, disable
    onKeyDown={e=>{if(e.code==='Space'){e.preventDefault();if(!e.repeat&&start('keyboard'))move('keyboard',Math.random()*WIDTH,Math.random()*HEIGHT);}}}
    onKeyUp={e=>{if(e.code==='Space'){e.preventDefault();end('keyboard');}}}/>
   <canvas ref={cover} width={WIDTH} height={HEIGHT} hidden={disabled} className="recovery-cover" aria-hidden="true"/>
+  <div ref={dust} className="scratch-dust-layer" aria-hidden="true" hidden={disabled}/>
  </div><p className="brush-status" role="status">{disabled?'Round finished':status}</p></>;
 }
 

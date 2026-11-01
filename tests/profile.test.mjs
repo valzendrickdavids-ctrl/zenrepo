@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {profileDefaults,validateProfile,googlePhoto} from '../src/lib/profileRules.js';
+import {profileDefaults,validateProfile,AVATARS} from '../src/lib/profileRules.js';
 test('new and returning profile defaults are explicit and personal fields optional',()=>{
- assert.equal(profileDefaults({name:'Demo'}).onboarding_complete,false);
- assert.equal(profileDefaults({name:'Demo'},true).onboarding_complete,true);
+ assert.equal(profileDefaults({user_metadata:{username:'player'}}).onboarding_complete,false);
+ assert.equal(profileDefaults({user_metadata:{username:'player'}},true).onboarding_complete,true);
+ assert.equal(profileDefaults({user_metadata:{username:'player'}}).display_name,'player');
  const p=validateProfile({...profileDefaults({}),display_name:' ',age:''});
  assert.equal(p.display_name,'Player');assert.equal(p.age,null);assert.equal(p.sex,'Prefer not to say');assert.equal(p.onboarding_complete,true);
 });
@@ -15,7 +16,14 @@ test('profile fields validate age, name, sex and avatar',()=>{
  assert.throws(()=>validateProfile({...base,sex:'unknown'}));
  assert.throws(()=>validateProfile({...base,avatar:'javascript:alert(1)'}));
 });
-test('Google photos only accept valid HTTPS URLs without embedded credentials',()=>{
- for(const avatar_url of ['javascript:alert(1)','http://example.com/pic','https://user:pass@example.com/pic',{}]) assert.equal(googlePhoto({user_metadata:{avatar_url}}),null);
- assert.equal(googlePhoto({app_metadata:{provider:'google'},user_metadata:{avatar_url:'https://example.com/photo.png'}}),'https://example.com/photo.png');
+test('only preset avatars are accepted after provider pictures are retired',()=>{
+ for(const avatar of Object.keys(AVATARS))assert.equal(validateProfile({...profileDefaults({}),avatar}).avatar,avatar);
+ for(const avatar of ['google','facebook','https://example.com/photo.png'])assert.throws(()=>validateProfile({...profileDefaults({}),avatar}));
+});
+
+test('profile photos accept bounded JPEG data, never external URLs or active image formats',()=>{
+ const photo='data:image/jpeg;base64,/9j/AA==',base=profileDefaults({});
+ assert.equal(validateProfile({...base,avatar:'rocket',avatar_image:photo}).avatar_image,photo);
+ for(const image of ['https://example.com/photo.jpg','data:image/svg+xml;base64,AA==','javascript:alert(1)','data:image/jpeg;base64,'+'A'.repeat(65536)])
+  assert.throws(()=>validateProfile({...base,avatar_image:image}));
 });

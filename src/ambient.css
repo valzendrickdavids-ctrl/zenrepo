@@ -1,0 +1,23 @@
+/* A decorative layer behind the game, clipped to the viewport. */
+.ambient-background{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;--ambient-blue:rgba(51,119,236,.5);--ambient-purple:rgba(145,61,206,.44);--ambient-dot:#7466ad;--ambient-width:min(110vw,1280px);--ambient-height:110vh;--ambient-core:18%;--ambient-edge:100%;--ambient-shape:ellipse closest-side}
+.dark .ambient-background{--ambient-blue:rgba(54,126,231,.34);--ambient-purple:rgba(158,63,200,.32);--ambient-dot:#c9bdf4;--ambient-width:min(90vw,1000px);--ambient-height:90vh;--ambient-core:0%;--ambient-edge:74%;--ambient-shape:ellipse}
+.ambient-glow,.ambient-particles{position:absolute;inset:0;pointer-events:none}
+.ambient-glow{opacity:1;transition:opacity 600ms ease}
+.ambient-glow::before,.ambient-glow::after{content:'';position:absolute;width:var(--ambient-width);height:var(--ambient-height);pointer-events:none;animation:ambient-glide 22s ease-in-out infinite alternate}
+.ambient-glow::before{left:-16%;top:-12%;background:radial-gradient(var(--ambient-shape),var(--ambient-blue) var(--ambient-core),transparent var(--ambient-edge))}
+.ambient-glow::after{right:-16%;bottom:-12%;background:radial-gradient(var(--ambient-shape),var(--ambient-purple) var(--ambient-core),transparent var(--ambient-edge));animation-delay:-11s;animation-direction:alternate-reverse}
+.ambient-particles{opacity:.7;transition:opacity 600ms ease}
+.ambient-particles>i{position:absolute;display:block;border-radius:50%;background:var(--ambient-dot);box-shadow:0 0 6px color-mix(in srgb,var(--ambient-dot) 45%,transparent);animation:ambient-float var(--particle-duration) var(--particle-delay) ease-in-out infinite alternate}
+.ambient-calm .ambient-glow{opacity:.35}
+.ambient-calm .ambient-particles{opacity:.14}
+.ambient-calm .ambient-glow::before,.ambient-calm .ambient-glow::after{animation-duration:56s}
+.ambient-calm .ambient-particles>i{animation-duration:48s}
+.ambient-paused .ambient-glow::before,.ambient-paused .ambient-glow::after,.ambient-paused .ambient-particles>i{animation-play-state:paused}
+@keyframes ambient-glide{from{transform:translate(0,0) scale(1)}to{transform:translate(9vw,6vh) scale(1.1)}}
+@keyframes ambient-float{from{transform:translate(0,0)}to{transform:translate(var(--particle-drift),-48px)}}
+@media(max-width:599px){.ambient-particles>i:nth-child(n+9){display:none}}
+@media(prefers-reduced-motion:reduce){
+ .ambient-glow,.ambient-particles{transition:none}
+ .ambient-glow::before,.ambient-glow::after,.ambient-particles>i{animation:none}
+ .ambient-particles{display:none}
+}

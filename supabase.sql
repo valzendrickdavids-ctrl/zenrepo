@@ -3,7 +3,6 @@
 -- Updated 2026-10-23: private player profiles, optional age/sex, avatars,
 -- first-time setup, per-difficulty leaderboards, and owner-only progress reset.
 -- Run the entire file. Existing accounts, scores and profile choices are retained.
--- This migration does not enable Facebook OAuth; configure that in Auth Providers.
 begin;
 create table if not exists public.game_runs (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -36,7 +35,7 @@ create table if not exists public.player_private_profiles (
   display_name text not null default 'Player' check (char_length(display_name) between 1 and 30),
   sex text not null default 'Prefer not to say' check (sex in ('Prefer not to say','Female','Male','Intersex')),
   age integer check (age between 1 and 120),
-  avatar text not null default 'owl' check (avatar in ('owl','fox','cat','panda','robot','rocket','facebook')),
+  avatar text not null default 'owl' check (avatar in ('owl','fox','cat','panda','robot','rocket','dog','tiger','bear','frog','penguin','unicorn')),
   onboarding_complete boolean not null default false
 );
 alter table public.player_private_profiles enable row level security;
@@ -60,7 +59,7 @@ declare player_id uuid := auth.uid(); clean_name text := coalesce(nullif(trim(p_
 begin
   if player_id is null then raise exception 'Authentication required'; end if;
   if char_length(clean_name)>30 or p_sex is null or p_sex not in ('Prefer not to say','Female','Male','Intersex')
-     or (p_age is not null and (p_age<1 or p_age>120)) or p_avatar is null or p_avatar not in ('owl','fox','cat','panda','robot','rocket','facebook')
+     or (p_age is not null and (p_age<1 or p_age>120)) or p_avatar is null or p_avatar not in ('owl','fox','cat','panda','robot','rocket','dog','tiger','bear','frog','penguin','unicorn')
      then raise exception 'Invalid profile'; end if;
   insert into public.player_private_profiles(user_id,display_name,sex,age,avatar,onboarding_complete)
     values(player_id,clean_name,p_sex,p_age,p_avatar,true)
@@ -152,9 +151,598 @@ grant execute on function public.reset_my_game() to authenticated;
 notify pgrst, 'reload schema';
 commit;
 -- Authenticated players can read score/profile rows. Game saves remain owner-only.
--- Scores are client-submitted for classroom play, not an anti-cheat competition.
--- GOOGLE LOGIN UPDATE: after this base schema, run the companion file
--- supabase/migrations/202610240001_google_login.sql to enable Google avatars
--- and the private, rate-limited login-notification ledger.
--- Then run supabase/migrations/202610240002_usernames.sql for username sign-in.
+-- Verified score submission is installed by the final section below.
 
+-- Username-only accounts and preset avatars.
+-- Username/password-only account update, 27 October 2026.
+-- Apply to the existing game database; account IDs, progress and scores are retained.
+begin;
+create table if not exists public.player_usernames (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  username text not null unique check (username ~ '^[a-z][a-z0-9_]{2,23}$')
+);
+alter table public.player_usernames enable row level security;
+revoke all on public.player_usernames from public,anon,authenticated;
+grant select on public.player_usernames to authenticated;
+grant select on public.player_usernames to service_role;
+drop policy if exists "read own username" on public.player_usernames;
+create policy "read own username" on public.player_usernames for select to authenticated using (user_id=(select auth.uid()));
+
+create or replace function public.set_my_username(p_username text)
+returns void language plpgsql security definer set search_path='' as $$
+declare name text := lower(trim(p_username));
+begin
+  if auth.uid() is null then raise exception 'Authentication required'; end if;
+  if name is null or name !~ '^[a-z][a-z0-9_]{2,23}$' then raise exception 'Invalid username'; end if;
+  -- Unique constraints prevent races, duplicate usernames, and username reassignment.
+  insert into public.player_usernames(user_id,username) values(auth.uid(),name);
+end;
+$$;
+revoke all on function public.set_my_username(text) from public,anon;
+grant execute on function public.set_my_username(text) to authenticated;
+
+create or replace function public.register_player_username()
+returns trigger language plpgsql security definer set search_path='' as $$
+declare name text := lower(trim(new.raw_user_meta_data->>'username'));
+begin
+  if name is not null and name<>'' then
+    if name !~ '^[a-z][a-z0-9_]{2,23}$' then raise exception 'Invalid username'; end if;
+    insert into public.player_usernames(user_id,username) values(new.id,name);
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.register_player_username() from public,anon,authenticated;
+drop trigger if exists register_player_username on auth.users;
+create trigger register_player_username after insert on auth.users for each row execute function public.register_player_username();
+-- Existing authenticated accounts may choose a username without changing their user ID.
+-- Unique credentials are never derived from public display names.
+
+create table if not exists public.username_login_limits(
+  bucket text primary key,
+  started_at timestamptz not null,
+  attempts integer not null
+);
+alter table public.username_login_limits enable row level security;
+revoke all on public.username_login_limits from public,anon,authenticated;
+
+create or replace function public.allow_username_login(p_name_hash text,p_ip_hash text)
+returns boolean language plpgsql security definer set search_path='' as $$
+declare key text; hits integer; limit_count integer;
+begin
+  if p_name_hash !~ '^[a-f0-9]{64}$' or p_ip_hash !~ '^[a-f0-9]{64}$'
+    or p_name_hash is null or p_ip_hash is null then return false; end if;
+  -- Atomic windows apply even for nonexistent usernames. Global cap also
+  -- limits abuse if forwarded address headers cannot be trusted.
+  foreach key in array array['global','ip:'||p_ip_hash,'name:'||p_name_hash] loop
+    insert into public.username_login_limits(bucket,started_at,attempts) values(key,now(),1)
+    on conflict(bucket) do update set
+      attempts=case when public.username_login_limits.started_at<now()-interval '15 minutes' then 1 else public.username_login_limits.attempts+1 end,
+      started_at=case when public.username_login_limits.started_at<now()-interval '15 minutes' then now() else public.username_login_limits.started_at end
+    returning attempts into hits;
+    limit_count := case when key='global' then 2000 when key like 'ip:%' then 40 else 8 end;
+    if hits>limit_count then return false; end if;
+  end loop;
+  delete from public.username_login_limits where started_at<now()-interval '1 day';
+  return true;
+end;
+$$;
+revoke all on function public.allow_username_login(text,text) from public,anon,authenticated;
+grant execute on function public.allow_username_login(text,text) to service_role;
+
+
+-- Public registration uses its own, tighter server-side request limits.
+create or replace function public.allow_username_registration(p_name_hash text,p_ip_hash text)
+returns boolean language plpgsql security definer set search_path='' as $$
+declare key text; hits integer; limit_count integer;
+begin
+  if p_name_hash is null or p_ip_hash is null or p_name_hash !~ '^[a-f0-9]{64}$' or p_ip_hash !~ '^[a-f0-9]{64}$' then return false; end if;
+  foreach key in array array['signup:global','signup:ip:'||p_ip_hash,'signup:name:'||p_name_hash] loop
+    insert into public.username_login_limits(bucket,started_at,attempts) values(key,now(),1)
+    on conflict(bucket) do update set
+      attempts=case when public.username_login_limits.started_at<now()-interval '1 hour' then 1 else public.username_login_limits.attempts+1 end,
+      started_at=case when public.username_login_limits.started_at<now()-interval '1 hour' then now() else public.username_login_limits.started_at end
+    returning attempts into hits;
+    limit_count:=case when key='signup:global' then 200 when key like 'signup:ip:%' then 10 else 3 end;
+    if hits>limit_count then return false; end if;
+  end loop;
+  delete from public.username_login_limits where started_at<now()-interval '1 day';
+  return true;
+end;
+$$;
+revoke all on function public.allow_username_registration(text,text) from public,anon,authenticated;
+grant execute on function public.allow_username_registration(text,text) to service_role;
+
+-- Retire provider pictures without changing account IDs, points or saved runs.
+do $$
+declare item record;
+begin
+  for item in select conname from pg_constraint where conrelid='public.player_private_profiles'::regclass and contype='c' and pg_get_constraintdef(oid) ilike '%avatar%' loop
+    execute format('alter table public.player_private_profiles drop constraint %I',item.conname);
+  end loop;
+end;
+$$;
+update public.player_private_profiles set avatar='owl' where avatar not in ('owl','fox','cat','panda','robot','rocket','dog','tiger','bear','frog','penguin','unicorn');
+alter table public.player_private_profiles add constraint player_private_profiles_avatar_check check(avatar in ('owl','fox','cat','panda','robot','rocket','dog','tiger','bear','frog','penguin','unicorn'));
+create or replace function public.save_player_profile(p_name text,p_sex text,p_age integer,p_avatar text)
+returns void language plpgsql security definer set search_path='' as $$
+declare player_id uuid:=auth.uid(); clean_name text:=coalesce(nullif(trim(p_name),''),'Player');
+begin
+  if player_id is null then raise exception 'Authentication required'; end if;
+  if char_length(clean_name)>30 or p_sex is null or p_sex not in ('Prefer not to say','Female','Male','Intersex')
+    or (p_age is not null and (p_age<1 or p_age>120)) or p_avatar is null or p_avatar not in ('owl','fox','cat','panda','robot','rocket','dog','tiger','bear','frog','penguin','unicorn') then raise exception 'Invalid profile'; end if;
+  insert into public.player_private_profiles(user_id,display_name,sex,age,avatar,onboarding_complete)
+  values(player_id,clean_name,p_sex,p_age,p_avatar,true)
+  on conflict(user_id) do update set display_name=excluded.display_name,sex=excluded.sex,age=excluded.age,avatar=excluded.avatar,onboarding_complete=true;
+  insert into public.profiles(user_id,display_name) values(player_id,clean_name)
+  on conflict(user_id) do update set display_name=excluded.display_name;
+end;
+$$;
+revoke all on function public.save_player_profile(text,text,integer,text) from public,anon;
+grant execute on function public.save_player_profile(text,text,integer,text) to authenticated;
+notify pgrst,'reload schema';
+commit;
+
+-- Authenticated in-game feedback.
+begin;
+create table if not exists public.player_feedback (
+ id uuid primary key default gen_random_uuid(),
+ user_id uuid not null references auth.users(id) on delete cascade,
+ category text not null check(category in ('Bug report','Suggestion','Other')),
+ message text not null check(char_length(message) between 10 and 2000),
+ created_at timestamptz not null default now()
+);
+alter table public.player_feedback enable row level security;
+revoke all on public.player_feedback from public,anon,authenticated;
+grant select on public.player_feedback to authenticated;
+grant select on public.player_feedback to service_role;
+drop policy if exists "read own feedback" on public.player_feedback;
+create policy "read own feedback" on public.player_feedback for select to authenticated using(user_id=(select auth.uid()));
+drop policy if exists "feedback owner guard" on public.player_feedback;
+create policy "feedback owner guard" on public.player_feedback as restrictive for select to authenticated using(user_id=(select auth.uid()));
+create index if not exists player_feedback_user_time on public.player_feedback(user_id,created_at);
+create or replace function public.submit_player_feedback(p_category text,p_message text)
+returns void language plpgsql security definer set search_path='' as $$
+declare uid uuid:=auth.uid(); clean text:=trim(p_message);
+begin
+ if uid is null then raise exception 'Authentication required'; end if;
+ if p_category is null or p_category not in ('Bug report','Suggestion','Other') or clean is null or char_length(clean) not between 10 and 2000 then raise exception 'Invalid feedback'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(uid::text||':feedback',0));
+ if (select count(*) from public.player_feedback where user_id=uid and created_at>now()-interval '1 hour')>=5 then raise exception 'Feedback limit reached'; end if;
+ insert into public.player_feedback(user_id,category,message) values(uid,p_category,clean);
+end;
+$$;
+revoke all on function public.submit_player_feedback(text,text) from public,anon;
+grant execute on function public.submit_player_feedback(text,text) to authenticated;
+notify pgrst,'reload schema';
+commit;
+
+-- Small, private profile images. Existing avatars and other player data are retained.
+begin;
+create table if not exists public.player_profile_photos (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  image_data text not null check (
+    char_length(image_data)<=65536 and
+    image_data ~ '^data:image/jpeg;base64,[A-Za-z0-9+/]+={0,2}$'
+  ),
+  updated_at timestamptz not null default now()
+);
+alter table public.player_profile_photos enable row level security;
+revoke all on public.player_profile_photos from public,anon;
+grant select,insert,update on public.player_profile_photos to authenticated;
+drop policy if exists "profile photo select own" on public.player_profile_photos;
+create policy "profile photo select own" on public.player_profile_photos
+  for select to authenticated using ((select auth.uid())=user_id);
+drop policy if exists "profile photo insert own" on public.player_profile_photos;
+create policy "profile photo insert own" on public.player_profile_photos
+  for insert to authenticated with check ((select auth.uid())=user_id);
+drop policy if exists "profile photo update own" on public.player_profile_photos;
+create policy "profile photo update own" on public.player_profile_photos
+  for update to authenticated using ((select auth.uid())=user_id) with check ((select auth.uid())=user_id);
+commit;
+
+-- Verified leaderboard uploads (2026-11-01).
+-- New uploads are replayed against official answers. Existing scores are retained.
+begin;
+create schema if not exists game_security;
+revoke all on schema game_security from public,anon,authenticated;
+create table if not exists game_security.answer_keys (
+  clue_id text primary key,difficulty text not null,answer text not null
+);
+insert into game_security.answer_keys(clue_id,difficulty,answer) values
+('keyboard','easy','Keyboard'),
+('mouse','easy','Mouse'),
+('monitor','easy','Monitor'),
+('cpu','easy','CPU'),
+('ram','easy','RAM'),
+('hard-drive','easy','Hard drive'),
+('usb-drive','easy','USB flash drive'),
+('router','easy','Router'),
+('ethernet','easy','Ethernet cable'),
+('server','easy','Server'),
+('printer','easy','Printer'),
+('webcam','easy','Webcam'),
+('database','easy','Database'),
+('firewall','easy','Firewall'),
+('cloud','easy','Cloud computing'),
+('binary','easy','Binary'),
+('flowchart','easy','Flowchart'),
+('motherboard','easy','Motherboard'),
+('laptop','easy','Laptop'),
+('tablet','easy','Tablet'),
+('smartphone','easy','Smartphone'),
+('headphones','easy','Headphones'),
+('microphone','easy','Microphone'),
+('speaker','easy','Speaker'),
+('digital-camera','easy','Digital camera'),
+('scanner','easy','Scanner'),
+('gamepad','easy','Gamepad'),
+('joystick','easy','Joystick'),
+('projector','easy','Projector'),
+('optical-disc','easy','Optical disc'),
+('memory-card','easy','Memory card'),
+('battery','easy','Battery'),
+('power-plug','easy','Power plug'),
+('cooling-fan','easy','Cooling fan'),
+('power-button','easy','Power button'),
+('ethernet-port','easy','Ethernet port'),
+('wifi','easy','Wi-Fi'),
+('bluetooth','easy','Bluetooth'),
+('satellite-dish','easy','Satellite dish'),
+('cell-tower','easy','Cell tower'),
+('computer-network','easy','Computer network'),
+('world-wide-web','easy','World Wide Web'),
+('email','easy','Email'),
+('chat','easy','Chat'),
+('video-call','easy','Video call'),
+('search','easy','Search'),
+('folder','easy','Folder'),
+('file','easy','File'),
+('text-document','easy','Text document'),
+('image-file','easy','Image file'),
+('video-file','easy','Video file'),
+('audio-file','easy','Audio file'),
+('archive-file','easy','Archive file'),
+('recycle-bin','easy','Recycle bin'),
+('download','easy','Download'),
+('upload','easy','Upload'),
+('save','easy','Save'),
+('copy','easy','Copy'),
+('cut','easy','Cut'),
+('clipboard','easy','Clipboard'),
+('undo','easy','Undo'),
+('redo','easy','Redo'),
+('zoom-in','easy','Zoom in'),
+('zoom-out','easy','Zoom out'),
+('lock','easy','Lock'),
+('key','easy','Key'),
+('security-shield','easy','Security shield'),
+('fingerprint','easy','Fingerprint'),
+('hide-password','easy','Hide password'),
+('qr-code','easy','QR code'),
+('barcode','easy','Barcode'),
+('location-pin','easy','Location pin'),
+('calendar','easy','Calendar'),
+('clock','easy','Clock'),
+('calculator','easy','Calculator'),
+('presentation','easy','Presentation'),
+('spreadsheet','easy','Spreadsheet'),
+('bar-chart','easy','Bar chart'),
+('paintbrush','easy','Paintbrush'),
+('pencil-tool','easy','Pencil tool'),
+('color-palette','easy','Color palette'),
+('crop-tool','easy','Crop tool'),
+('settings','easy','Settings'),
+('terminal','easy','Terminal'),
+('source-code','easy','Source code'),
+('software-bug','easy','Software bug'),
+('curly-braces','easy','Curly braces'),
+('square-brackets','easy','Square brackets'),
+('hyperlink','easy','Hyperlink'),
+('bookmark','easy','Bookmark'),
+('notification','easy','Notification'),
+('user-account','easy','User account'),
+('user-group','easy','User group'),
+('contacts','easy','Contacts'),
+('refresh','easy','Refresh'),
+('help','easy','Help'),
+('information','easy','Information'),
+('sign-in','easy','Sign in'),
+('sign-out','easy','Sign out'),
+('shutdown','easy','Shutdown'),
+('html','medium','HTML'),
+('css','medium','CSS'),
+('javascript','medium','JavaScript'),
+('python','medium','Python'),
+('sql','medium','SQL'),
+('json','medium','JSON'),
+('xml','medium','XML'),
+('csv','medium','CSV'),
+('boolean','medium','Boolean'),
+('variable','medium','Variable'),
+('array','medium','Array'),
+('object','medium','Object'),
+('function','medium','Function'),
+('loop','medium','Loop'),
+('conditional','medium','Conditional'),
+('recursion','medium','Recursion'),
+('stack','medium','Stack'),
+('queue','medium','Queue'),
+('linked-list','medium','Linked list'),
+('binary-tree','medium','Binary tree'),
+('hash-table','medium','Hash table'),
+('algorithm','medium','Algorithm'),
+('sorting','medium','Sorting'),
+('linear-search','medium','Linear search'),
+('binary-search','medium','Binary search'),
+('star-topology','medium','Star topology'),
+('bus-topology','medium','Bus topology'),
+('ring-topology','medium','Ring topology'),
+('mesh-topology','medium','Mesh topology'),
+('ip-address','medium','IP address'),
+('dns','medium','DNS'),
+('dhcp','medium','DHCP'),
+('tcp','medium','TCP'),
+('udp','medium','UDP'),
+('http','medium','HTTP'),
+('https','medium','HTTPS'),
+('url','medium','URL'),
+('vpn','medium','VPN'),
+('proxy','medium','Proxy server'),
+('load-balancer','medium','Load balancer'),
+('network-switch','medium','Network switch'),
+('access-point','medium','Access point'),
+('subnet-mask','medium','Subnet mask'),
+('network-port','medium','Network port'),
+('packet','medium','Packet'),
+('client-server','medium','Client-server architecture'),
+('peer-to-peer','medium','Peer-to-peer'),
+('cache','medium','Cache'),
+('cookie','medium','Cookie'),
+('session','medium','Session'),
+('password-hashing','medium','Password hashing'),
+('encryption','medium','Encryption'),
+('phishing','medium','Phishing'),
+('malware','medium','Malware'),
+('ransomware','medium','Ransomware'),
+('mfa','medium','Multi-factor authentication'),
+('backup','medium','Backup'),
+('version-control','medium','Version control'),
+('git-branch','medium','Git branch'),
+('git-merge','medium','Git merge'),
+('git-commit','medium','Git commit'),
+('unit-test','medium','Unit test'),
+('debugger','medium','Debugger'),
+('exception','medium','Exception'),
+('api','medium','API'),
+('rest','medium','REST'),
+('crud','medium','CRUD'),
+('primary-key','medium','Primary key'),
+('foreign-key','medium','Foreign key'),
+('database-index','medium','Database index'),
+('transaction','medium','Transaction'),
+('normalization','medium','Normalization'),
+('container','medium','Container'),
+('virtual-machine','medium','Virtual machine'),
+('operating-system','medium','Operating system'),
+('b-tree','hard','B-tree'),
+('red-black-tree','hard','Red-black tree'),
+('avl-tree','hard','AVL tree'),
+('binary-heap','hard','Binary heap'),
+('trie','hard','Trie'),
+('breadth-first-search','hard','Breadth-first search'),
+('depth-first-search','hard','Depth-first search'),
+('dijkstra','hard','Dijkstra''s algorithm'),
+('a-star','hard','A-star search'),
+('quicksort','hard','Quicksort'),
+('merge-sort','hard','Merge sort'),
+('dynamic-programming','hard','Dynamic programming'),
+('memoization','hard','Memoization'),
+('big-o','hard','Big O notation'),
+('race-condition','hard','Race condition'),
+('deadlock','hard','Deadlock'),
+('mutex','hard','Mutex'),
+('semaphore','hard','Semaphore'),
+('thread-pool','hard','Thread pool'),
+('event-loop','hard','Event loop'),
+('promise','hard','Promise'),
+('closure','hard','Closure'),
+('prototype','hard','Prototype'),
+('polymorphism','hard','Polymorphism'),
+('dependency-injection','hard','Dependency injection'),
+('observer-pattern','hard','Observer pattern'),
+('singleton-pattern','hard','Singleton pattern'),
+('factory-pattern','hard','Factory pattern'),
+('cap-theorem','hard','CAP theorem'),
+('acid','hard','ACID'),
+('mvcc','hard','MVCC'),
+('optimistic-concurrency','hard','Optimistic concurrency control'),
+('pessimistic-locking','hard','Pessimistic locking'),
+('two-phase-commit','hard','Two-phase commit'),
+('raft','hard','Raft consensus'),
+('eventual-consistency','hard','Eventual consistency'),
+('sharding','hard','Sharding'),
+('replication','hard','Replication'),
+('write-ahead-log','hard','Write-ahead log'),
+('query-plan','hard','Query execution plan'),
+('sql-injection','hard','SQL injection'),
+('xss','hard','Cross-site scripting'),
+('csrf','hard','Cross-site request forgery'),
+('jwt','hard','JSON Web Token'),
+('public-key-cryptography','hard','Public-key cryptography'),
+('digital-signature','hard','Digital signature'),
+('tls-handshake','hard','TLS handshake'),
+('zero-knowledge-proof','hard','Zero-knowledge proof'),
+('merkle-tree','hard','Merkle tree'),
+('bloom-filter','hard','Bloom filter')
+on conflict(clue_id) do update set difficulty=excluded.difficulty,answer=excluded.answer;
+create table if not exists game_security.verified_runs (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  run_id uuid not null,difficulty text not null,clue_order jsonb not null,
+  base_index integer not null default 0,base_score integer not null default 0,
+  base_correct integer not null default 0,events jsonb not null default '[]',
+  score integer not null default 0,correct integer not null default 0,
+  updated_at timestamptz not null default now(),primary key(user_id,run_id)
+);
+create table if not exists game_security.applied_rules (version integer primary key);
+alter table game_security.answer_keys enable row level security;
+alter table game_security.verified_runs enable row level security;
+alter table game_security.applied_rules enable row level security;
+revoke all on all tables in schema game_security from public,anon,authenticated;
+
+-- Freeze compatible saves once, before accepting new submissions. A later edit
+-- to game_runs can never create or raise a grandfathered starting score.
+do $$
+begin
+  if not exists(select 1 from game_security.applied_rules where version=1) then
+    with candidates as materialized (
+      select g.user_id,r from public.game_runs g cross join lateral (
+        select g.state as r union all
+        select value from jsonb_each(case when jsonb_typeof(g.state->'savedRuns')='object' then g.state->'savedRuns' else '{}'::jsonb end)
+      ) saves
+      where r->>'id' ~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$'
+        and r->>'difficulty' in ('easy','medium','hard') and r->>'phase' in ('playing','answered','complete')
+        and r->>'index' ~ '^[0-9]{1,3}$' and r->>'score' ~ '^[0-9]{1,7}$' and r->>'correct' ~ '^[0-9]{1,3}$'
+        and jsonb_typeof(r->'order')='array'
+    )
+    insert into game_security.verified_runs(user_id,run_id,difficulty,clue_order,base_index,base_score,base_correct,score,correct)
+    select g.user_id,(r->>'id')::uuid,r->>'difficulty',r->'order',
+      case when r->>'phase'='complete' then jsonb_array_length(r->'order') else (r->>'index')::integer+case when r->>'phase'='answered' then 1 else 0 end end,
+      (r->>'score')::integer,(r->>'correct')::integer,(r->>'score')::integer,(r->>'correct')::integer
+    from candidates g
+    where jsonb_array_length(r->'order')=case r->>'difficulty' when 'easy' then 100 when 'medium' then 75 else 50 end
+      and (r->>'index')::integer < jsonb_array_length(r->'order')
+      and (r->>'correct')::integer <= (r->>'index')::integer+case when r->>'phase' in ('answered','complete') then 1 else 0 end
+      and (r->>'score')::integer <= (r->>'correct')::integer*case r->>'difficulty' when 'easy' then 1000 when 'medium' then 1500 else 2000 end
+      and (select count(distinct k.clue_id) from jsonb_array_elements_text(r->'order') x join game_security.answer_keys k on k.clue_id=x.value and k.difficulty=r->>'difficulty')=jsonb_array_length(r->'order')
+    on conflict(user_id,run_id) do nothing;
+    insert into game_security.applied_rules values(1);
+  end if;
+end;
+$$;
+
+alter table public.scores add column if not exists verified boolean not null default false;
+-- SELECT and the player's existing DELETE/reset access are unchanged.
+revoke insert,update on public.scores from public,anon,authenticated;
+drop policy if exists "scores insert own" on public.scores;
+drop policy if exists "scores require verification" on public.scores;
+create policy "scores require verification" on public.scores as restrictive for insert to authenticated with check(false);
+
+create or replace function public.submit_verified_score(p_run jsonb) returns jsonb
+language plpgsql security definer set search_path=''
+as $$
+declare
+  uid uuid:=auth.uid(); rid uuid; mode text; duration integer; cap integer; pool integer;
+  ledger game_security.verified_runs%rowtype;
+  audit jsonb; history jsonb; item jsonb; incoming_order jsonb; ordinal integer;
+  calculated integer; correct_count integer; seconds numeric; previous_seconds numeric;
+  expected text; guess text; event_count integer; shared integer; n integer; snapshot uuid;
+begin
+  if uid is null then raise exception using errcode='42501',message='Authentication required'; end if;
+  if jsonb_typeof(p_run) is distinct from 'object' or octet_length(p_run::text)>1048576
+    or jsonb_typeof(p_run->'id') is distinct from 'string'
+    or (p_run->>'id') !~ '^[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}$'
+    or jsonb_typeof(p_run->'score') is distinct from 'number' or (p_run->>'score') !~ '^[0-9]{1,7}$'
+  then raise exception using errcode='23514',message='Invalid score submission'; end if;
+  rid:=(p_run->>'id')::uuid;mode:=p_run->>'difficulty';
+  case mode when 'easy' then duration:=60;cap:=1000;pool:=100;
+    when 'medium' then duration:=40;cap:=1500;pool:=75;
+    when 'hard' then duration:=25;cap:=2000;pool:=50;
+    else raise exception using errcode='23514',message='Invalid difficulty'; end case;
+  if (p_run->>'score')::integer>cap*pool then raise exception using errcode='23514',message='Impossible score'; end if;
+
+  audit:=p_run->'scoreAudit';incoming_order:=p_run->'order';
+  if audit is null and incoming_order is null then
+    -- Compatibility for already queued, pre-upgrade snapshots. No new points
+    -- can be awarded without an answer history.
+    select * into ledger from game_security.verified_runs where user_id=uid and run_id=rid for update;
+    if not found or ledger.difficulty<>mode or ledger.base_score<>(p_run->>'score')::integer then
+      raise exception using errcode='23514',message='Saved run predates score verification'; end if;
+    calculated:=ledger.base_score;correct_count:=ledger.base_correct;
+  else
+    if jsonb_typeof(incoming_order) is distinct from 'array' or jsonb_array_length(incoming_order)<>pool then
+      raise exception using errcode='23514',message='Invalid clue order'; end if;
+    if (select count(distinct k.clue_id) from jsonb_array_elements_text(incoming_order) x join game_security.answer_keys k on k.clue_id=x.value and k.difficulty=mode)<>pool then
+      raise exception using errcode='23514',message='Duplicate or wrong-difficulty clues'; end if;
+    if jsonb_typeof(audit) is distinct from 'object' or audit->'version' is distinct from '1'::jsonb
+      or jsonb_typeof(audit->'events') is distinct from 'array'
+      or jsonb_typeof(audit->'baseIndex') is distinct from 'number' or (audit->>'baseIndex') !~ '^[0-9]{1,3}$'
+      or jsonb_typeof(audit->'baseScore') is distinct from 'number' or (audit->>'baseScore') !~ '^[0-9]{1,7}$'
+      or jsonb_typeof(audit->'baseCorrect') is distinct from 'number' or (audit->>'baseCorrect') !~ '^[0-9]{1,3}$'
+      or jsonb_typeof(p_run->'correct') is distinct from 'number' or (p_run->>'correct') !~ '^[0-9]{1,3}$'
+    then raise exception using errcode='23514',message='Missing or invalid answer history'; end if;
+    history:=audit->'events';event_count:=jsonb_array_length(history);
+    if event_count>5000 then raise exception using errcode='23514',message='Answer history too large'; end if;
+    -- A new ledger always starts at zero; a browser cannot manufacture a baseline.
+    insert into game_security.verified_runs(user_id,run_id,difficulty,clue_order)
+      values(uid,rid,mode,incoming_order) on conflict(user_id,run_id) do nothing;
+    select * into ledger from game_security.verified_runs where user_id=uid and run_id=rid for update;
+    if ledger.difficulty<>mode or ledger.clue_order<>incoming_order
+      or ledger.base_index<>(audit->>'baseIndex')::integer or ledger.base_score<>(audit->>'baseScore')::integer
+      or ledger.base_correct<>(audit->>'baseCorrect')::integer then
+      raise exception using errcode='23514',message='Run identity or baseline changed'; end if;
+    shared:=least(jsonb_array_length(ledger.events),event_count);
+    if shared>0 then
+      for n in 0..shared-1 loop
+        if ledger.events->n is distinct from history->n then
+          raise exception using errcode='23514',message='Previously submitted answers cannot be rewritten'; end if;
+      end loop;
+    end if;
+    ordinal:=ledger.base_index;calculated:=ledger.base_score;correct_count:=ledger.base_correct;previous_seconds:=duration;
+    for item in select value from jsonb_array_elements(history) loop
+      if jsonb_typeof(item) is distinct from 'object' or jsonb_typeof(item->'index') is distinct from 'number'
+        or item->>'index' is distinct from ordinal::text or ordinal>=pool
+        or jsonb_typeof(item->'remaining') is distinct from 'number' or length(item->>'remaining')>30
+      then raise exception using errcode='23514',message='Invalid or repeated round'; end if;
+      seconds:=(item->>'remaining')::numeric;
+      if seconds<0 or seconds>duration or seconds>previous_seconds or seconds*1000<>trunc(seconds*1000) then
+        raise exception using errcode='23514',message='Invalid round timer'; end if;
+      if item->'guess'='null'::jsonb and seconds=0 then
+        ordinal:=ordinal+1;previous_seconds:=duration;
+      else
+        if jsonb_typeof(item->'guess') is distinct from 'string' or length(item->>'guess') not between 1 and 100 or seconds<=0 then
+          raise exception using errcode='23514',message='Invalid answer'; end if;
+        guess:=item->>'guess';
+        select answer into expected from game_security.answer_keys where clue_id=incoming_order->>ordinal and difficulty=mode;
+        if guess collate "C" = expected collate "C" then
+          calculated:=calculated+greatest(1,floor(cap*seconds/duration+0.5)::integer);
+          correct_count:=correct_count+1;ordinal:=ordinal+1;previous_seconds:=duration;
+        else calculated:=greatest(0,calculated-100);previous_seconds:=seconds;
+        end if;
+      end if;
+    end loop;
+    if calculated<>(p_run->>'score')::integer or correct_count<>(p_run->>'correct')::integer
+      or (case p_run->>'phase' when 'playing' then ordinal when 'answered' then ordinal-1 when 'complete' then pool-1 else -1 end)::text is distinct from p_run->>'index'
+      or (p_run->>'phase'='complete' and ordinal<>pool)
+      or (p_run->>'phase'='playing' and ordinal>=pool)
+    then raise exception using errcode='23514',message='Score does not match the answer history'; end if;
+    if event_count>=jsonb_array_length(ledger.events) then
+      update game_security.verified_runs set events=history,score=calculated,correct=correct_count,updated_at=now() where user_id=uid and run_id=rid;
+    end if;
+  end if;
+  -- Snapshot identity is generated here. Retries can never mint extra points.
+  snapshot:=md5(rid::text||':'||mode||':'||calculated::text||':verified')::uuid;
+  insert into public.scores(user_id,run_id,difficulty,score,verified) values(uid,snapshot,mode,calculated,true)
+    on conflict(user_id,run_id) do nothing;
+  return jsonb_build_object('score',calculated,'correct',correct_count,'verified',true);
+end;
+$$;
+revoke all on function public.submit_verified_score(jsonb) from public,anon;
+grant execute on function public.submit_verified_score(jsonb) to authenticated;
+
+-- Reset clears only the requesting player's rows, including the private ledger.
+create or replace function public.reset_my_game() returns void
+language plpgsql security definer set search_path=''
+as $$
+declare uid uuid:=auth.uid();
+begin
+  if uid is null then raise exception using errcode='42501',message='Authentication required'; end if;
+  delete from public.scores where user_id=uid;
+  delete from public.game_runs where user_id=uid;
+  delete from game_security.verified_runs where user_id=uid;
+end;
+$$;
+revoke all on function public.reset_my_game() from public,anon;
+grant execute on function public.reset_my_game() to authenticated;
+notify pgrst,'reload schema';
+commit;

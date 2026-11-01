@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { BrushEngine, STROKE_LIMIT, TOTAL_CELLS, RECOVERY_MS } from '../src/lib/brushEngine.js';
-import { difficulties, points } from '../src/lib/engine.js';
+import { difficulties } from '../src/lib/engine.js';
 test('every fast move is bounded before erasing, in every difficulty',()=>{
  for(const d of Object.values(difficulties)){
   const m=new BrushEngine(d.attempts);assert.ok(m.start(1,100));
@@ -14,12 +14,11 @@ test('every fast move is bounded before erasing, in every difficulty',()=>{
   assert.equal(m.used,1);
  }
 });
-test('release zeros readout immediately but retains coverage for scoring',()=>{
+test('release zeros readout immediately but retains cumulative brush coverage',()=>{
  const m=new BrushEngine(8);m.start(1,100);m.move(1,200,200,42,101);
- const coverage=m.scoringCoverage,score=points(coverage,30,'easy');
+ const coverage=m.scoringCoverage;
  assert.ok(m.revealed>0);m.end(1,200);
  assert.equal(m.revealed,0);assert.equal(m.scoringCoverage,coverage);
- assert.equal(points(m.scoringCoverage,30,'easy'),score);
 });
 test('all attempts during recovery are ignored until exactly 2000ms',()=>{
  const m=new BrushEngine(8);m.start(1,100);m.move(1,100,100,42,101);m.end(1,200);

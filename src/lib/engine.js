@@ -4,16 +4,23 @@ export const difficulties = {
   medium: { label: 'Moderate', seconds: 40, brush: 18, attempts: 6, multiplier: 1.5, color: '#c46a12' },
   hard: { label: 'Expert', seconds: 25, brush: 12, attempts: 5, multiplier: 2, color: '#d54754' },
 };
-export const normalize = value => String(value).toLowerCase().replace(/\*/g, 'star').replace(/[^a-z0-9]/g, '');
-export const matches = (level, guess) => [level.answer, ...level.aliases].some(a => normalize(a) === normalize(guess));
-export const points = (revealed, seconds, difficulty) => Math.round((1000 * (1 - Math.min(100, Math.max(0, revealed)) / 100) + Math.max(0, seconds) * 5) * difficulties[difficulty].multiplier);
+// The catalog's official spelling and case are the required naming convention.
+export const matches = (level, guess) => typeof level?.answer === 'string' && typeof guess === 'string' && guess === level.answer;
+export const answerPattern = answer => answer.replace(/\p{Lu}/gu, 'A').replace(/\p{Ll}/gu, 'a').replace(/\p{Nd}/gu, '0');
+export function points(secondsRemaining, difficulty) {
+  const mode=difficulties[difficulty];
+  if(!mode||!Number.isFinite(secondsRemaining)||secondsRemaining<=0)return 0;
+  // Integer milliseconds keep browser and database half-point rounding identical.
+  const ms=Math.min(mode.seconds*1000,Math.max(1,Math.round(secondsRemaining*1000)));
+  return Math.max(1,Math.floor((ms*1000*mode.multiplier+mode.seconds*500)/(mode.seconds*1000)));
+}
 export function shuffle(items, random = Math.random) {
   const out = [...items];
   for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
   return out;
 }
 export function newRun(levels, difficulty) {
-  return { version: 3, id: crypto.randomUUID(), order: shuffle(levels.filter(l => l.difficulty === difficulty).map(l => l.id)), difficulty, index: 0, score: 0, correct: 0, brushing: emptyBrush(), phase: 'playing', remaining: difficulties[difficulty].seconds, deadline: null, updatedAt: Date.now() };
+  return { version: 3, id: crypto.randomUUID(), order: shuffle(levels.filter(l => l.difficulty === difficulty).map(l => l.id)), difficulty, index: 0, score: 0, correct: 0, scoreAudit:{version:1,baseIndex:0,baseScore:0,baseCorrect:0,events:[]}, brushing: emptyBrush(), phase: 'playing', remaining: difficulties[difficulty].seconds, deadline: null, updatedAt: Date.now() };
 }
 export function validRun(run, levels) {
   const pool = levels.filter(l => l.difficulty === run?.difficulty);

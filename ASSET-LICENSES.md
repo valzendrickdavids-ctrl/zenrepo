@@ -1,5 +1,9 @@
 # Image attribution and reuse
 
+## Existing photos and application screenshots
+
+Verified replacements are listed in `src/data/rasterImages.js`. Each entry records the original Wikimedia Commons file page, credited author, license, and any thumbnail processing. A public, readable copy is included at `public/image-credits.html` and linked beside the game image. Keep this credit page and each source license with redistributed copies. The original SVG illustrations remain available for concepts awaiting an approved real-world photo or application screenshot; converting those illustrations to PNG does not qualify as a replacement.
+
 The Beginner illustrations use Lucide 0.468.0 icon paths, arranged on a custom background, except the custom memory-card, USB-drive and Ethernet-cable illustrations.
 Lucide includes some icons derived from Feather. Keep these notices with redistributed images.
 The 125 Moderate/Expert diagrams and the three custom device drawings were authored for this project.

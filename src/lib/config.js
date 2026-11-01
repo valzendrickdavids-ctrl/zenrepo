@@ -1,7 +1,7 @@
 export function validateConfig(rawUrl = '', rawKey = '') {
   const url = rawUrl.trim().replace(/\/+$/, '');
   const key = rawKey.trim();
-  if (!url && !key) return { valid: false, message: 'Local demo mode. Add your Supabase settings to enable online accounts.' };
+  if (!url && !key) return { valid: false, message: 'Account setup is required. Add your Supabase settings to enable registration and sign-in.' };
   if (!url || !key) return { valid: false, message: 'Both Supabase URL and browser key are required in .env.local.' };
   if (/[<>\[\]]|your-project|replace-me|example\.com/i.test(url)) return { valid: false, message: 'Replace the placeholder URL with your Supabase Project URL.' };
   try {

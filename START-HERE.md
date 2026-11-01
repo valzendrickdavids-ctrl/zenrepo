@@ -1,45 +1,73 @@
-# Clear & Conquer — latest game download
+# Clear & Conquer — updated game
 
-Packaged October 24, 2026. Includes complete editable source, a prebuilt local-demo
-version in dist, 225 SVG clues (100 Beginner / 75 Moderate / 50 Expert), tests,
-database SQL, migrations and server function source. No credentials are included.
+Release: 2 November 2026. This package contains the complete editable web game,
+all local game images, account functions, current database setup and tests.
+No automatic publishing workflow or repository connection is included.
 
-## Run the included demo
+## Run on your computer
 
-1. Extract the ZIP completely; install Node.js 22 or newer if needed.
-2. Open a terminal in the clear-and-conquer folder containing package.json.
-3. Run `npm ci`.
-4. Run `npm run preview -- --host 127.0.0.1 --port 5178 --strictPort`.
-5. Open http://127.0.0.1:5178/ and choose the local demo.
+1. Extract the ZIP into a normal folder; do not run files from inside the ZIP.
+2. Install Node.js 22 or newer if it is not already installed.
+3. Keep your existing private `.env.local` when updating the same project. For a
+   fresh folder, copy `.env.example` to `.env.local` and privately fill in your
+   Supabase project URL and publishable/anon browser key. Credentials are not
+   included in this ZIP. Never use a service-role or secret key in the frontend.
+4. Open a terminal in the extracted `Clear-Conquer` folder and run:
 
-Stop any previous game server using port 5178 first. Keep the terminal running.
-Do not double-click index.html. This is a web game, not a standalone Windows EXE.
+       npm ci
+       npm run dev -- --host 127.0.0.1 --port 5184 --strictPort
 
-## Restore online play privately
+5. Open http://127.0.0.1:5184/. If an older game server is using that port,
+   stop the older server before starting this copy.
 
-Copy .env.example to .env.local and enter your Supabase Project URL and browser-safe
-publishable/anon key from your own Supabase dashboard. Never use a service-role key.
-Do not put the Google Client Secret in this file: it is already stored in Supabase.
-Then run `npm run build` and restart the preview command above. The included dist
-is deliberately a demo-only build so the download contains no account credentials.
+The game uses a local web server. Opening `index.html` directly does not run the
+React/Vite source. Account sign-in and shared online features require Supabase
+and an internet connection. The localhost address works on your own computer.
 
-## Verified setup and remaining deployment work
+## Database and accounts
 
-- All 42 automated tests pass; all 225 clue assets pass verification.
-- Google OAuth client and Supabase Google provider were configured on the existing
-  project kvelkknbefmcmagjipdj. The callback matches and the local return URL is allowed.
-- The configured local game's Google button reached Google's account chooser.
-  Final account consent, callback completion and profile saving were not tested.
-- The Google app is still in testing, not published for a public launch.
-- New username-login and login-notification server functions and their SQL
-  migrations are included, but their live deployment has NOT been verified or
-  completed in this setup. Follow USERNAME-SETUP.md and GOOGLE-SETUP.md.
-- Login emails additionally need a verified Resend sender and server-side secrets.
-  They are not automatically enabled by downloading or building these files.
+The Supabase project connected to the current localhost game has already received
+the latest feedback, avatar/photo and verified-score updates. This ZIP does not
+change that database or publish a website when downloaded or extracted.
 
-For a fresh database apply supabase.sql, then the migration files in filename order.
-For an existing database apply only missing migrations after reviewing/backing up
-the database. Do not rerun older base SQL after newer migrations.
+For a different Supabase project, apply the complete current `supabase.sql` and
+follow `USERNAME-SETUP.md` for username account functions and `GOOGLE-SETUP.md`
+for Google sign-in. Google is available on the login page; username/password
+registration remains available. Do not run older dated setup scripts after the
+current consolidated SQL, because they can replace newer function definitions.
 
-The game uses client-generated scores; it is intended for classroom play, not
-cheat-resistant competition. See README.md and ASSET-LICENSES.md for details.
+The latest existing-project upgrades are:
+
+- `supabase/migrations/202611010001_private_profile_photos.sql`
+- `supabase/migrations/202611010002_more_profile_avatars.sql`
+- `supabase/migrations/202611010003_verified_scores.sql`
+
+Existing account IDs, saved runs and leaderboard entries are retained. See
+`docs/leaderboard-validation.md` for old-save compatibility and verification limits.
+
+## Included updates
+
+- Updated start, login, tutorial, main menu, gameplay and completion layouts.
+- In-game names in mobile headers, single-line menu titles/taglines, and compact,
+  matching tablet difficulty and leaderboard cards with stable Resume spacing.
+- Larger logo/title, compact settings with an Audio submenu, full-screen controls,
+  background effects, and opening/closing animations.
+- Separate saves and Resume buttons for each difficulty; safe local quitting and
+  automatic retry of pending score uploads.
+- Circular avatar choices, eleven presets and custom profile photos.
+- Exact answer matching, capitalization/format reminders and server-side checks
+  of new leaderboard submissions.
+- Gold/silver/bronze medals, internal leaderboard scrolling and automatic updates
+  every 10 seconds while visible and online, plus reconnect/focus refresh.
+- Google or username/password login, profile autosave and feedback/report support.
+
+## Checks and production build
+
+    npm test
+    npm run verify:images
+    npm run build
+
+The build creates `dist` using your configured browser keys. Rebuild after changing
+`.env.local`. Deploy account functions separately when using a new project.
+This package does not include `node_modules`, old builds, private keys, player
+data, database dumps, temporary setup pages or repository history.

@@ -1,0 +1,29 @@
+/* Short, decorative motion never changes the game's timers or brush coverage. */
+@keyframes menu-arrive{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.home-menu>.menu-identity,.home-menu>.menu-layout,.auth-wrap>.panel,.tutorial,.modal[open],.in-page-modal{animation:menu-arrive 220ms ease-out both}
+.home-menu .difficulty{transition:transform 180ms ease-out,box-shadow 180ms ease-out,border-color 180ms ease-out}
+.home-menu .difficulty.selected{transform:translateY(-2px);animation:difficulty-glow 280ms ease-out}
+@keyframes difficulty-glow{0%{box-shadow:0 0 0 1px var(--mode)}45%{box-shadow:0 0 12px 2px color-mix(in srgb,var(--mode) 40%,transparent)}100%{box-shadow:0 0 0 1px var(--mode)}}
+.scratch-dust-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:3}
+.scratch-dust{position:absolute;width:3px;height:3px;border-radius:50%;background:#f4e8cf;animation:dust-drift 320ms ease-out forwards;pointer-events:none}
+@keyframes dust-drift{from{opacity:.8;transform:translate(0,0) scale(1)}to{opacity:0;transform:translate(var(--dust-x),var(--dust-y)) scale(.3)}}
+.round-outcome{display:inline-flex;align-items:center;gap:6px}
+.correct-check{flex-shrink:0;color:var(--mode);animation:check-pop 240ms ease-out both}
+@keyframes check-pop{from{opacity:0;transform:scale(.5)}70%{opacity:1;transform:scale(1.12)}to{opacity:1;transform:scale(1)}}
+.correct-answer .round-points>strong{display:inline-block;animation:points-rise 300ms ease-out both}
+@keyframes points-rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.leaderboard .rank-medal{position:relative;overflow:hidden}
+.rank-medal::after{content:'';position:absolute;inset:-4px;background:linear-gradient(110deg,transparent 30%,#fff9 50%,transparent 70%);transform:translateX(-130%);animation:medal-shine 600ms 100ms ease-out both;pointer-events:none}
+@keyframes medal-shine{to{transform:translateX(130%)}}
+.completion-award{position:relative;isolation:isolate}
+.completion-trophy{animation:trophy-arrive 300ms ease-out both}
+@keyframes trophy-arrive{from{opacity:0;transform:scale(.75)}75%{opacity:1;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
+.completion-confetti{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2;border-radius:12px}
+.completion-confetti>i{position:absolute;top:-12px;width:5px;height:9px;border-radius:1px;opacity:0;animation:confetti-fall 1100ms var(--confetti-delay) ease-out both}
+@keyframes confetti-fall{0%{opacity:0;transform:translateY(0) rotate(0)}12%,65%{opacity:.9}100%{opacity:0;transform:translateY(260px) rotate(var(--confetti-turn))}}
+@media(prefers-reduced-motion:reduce){
+ .home-menu>.menu-identity,.home-menu>.menu-layout,.auth-wrap>.panel,.tutorial,.modal[open],.in-page-modal,.home-menu .difficulty.selected,.correct-check,.correct-answer .round-points>strong,.completion-trophy,.rank-medal::after,.completion-confetti>i,.scratch-dust{animation:none}
+ .home-menu .difficulty{transition:none}
+ .home-menu .difficulty.selected{transform:none}
+ .scratch-dust-layer,.completion-confetti,.rank-medal::after{display:none}
+}
