@@ -13,7 +13,7 @@ function Rank({place}) {
     ? <span className="rank rank-medal" role="img" aria-label={medal.label} title={medal.label}>{medal.symbol}</span>
     : <span className="rank">{String(place).padStart(2,'0')}</span>;
 }
-export default function Leaderboard({ difficulty, compact=false, refresh=0, visibleRows=0 }) {
+export default function Leaderboard({ difficulty, refresh=0 }) {
   const [rows,setRows]=useState([]), [status,setStatus]=useState('Loading scores…');
   const [refreshError,setRefreshError]=useState('');
   const previous=useRef({difficulty,rows:[]});
@@ -26,7 +26,7 @@ export default function Leaderboard({ difficulty, compact=false, refresh=0, visi
     });
   },[difficulty,refresh]);
   const mode=difficulties[difficulty];
-  return <section className="panel leaderboard" aria-label={`${mode.label} leaderboard`} style={{'--mode':mode.color,'--leaderboard-visible-rows':visibleRows|| (compact?5:6)}}><div className="row spread"><h2>{mode.label} leaderboard</h2><span className="eyebrow" role="status" title={refreshError?'Scores could not refresh. Retrying automatically.':'Scores refresh automatically every 10 seconds.'} aria-label={refreshError?'Leaderboard update failed; retrying automatically':'Online leaderboard; updates automatically'}>{refreshError?'RETRY':'ONLINE'}</span></div>
+  return <section className="panel leaderboard" aria-label={`${mode.label} leaderboard`} style={{'--mode':mode.color,'--leaderboard-visible-rows':5}}><div className="row spread"><h2>{mode.label} leaderboard</h2><span className="eyebrow" role="status" title={refreshError?'Scores could not refresh. Retrying automatically.':'Scores refresh automatically every 10 seconds.'} aria-label={refreshError?'Leaderboard update failed; retrying automatically':'Online leaderboard; updates automatically'}>{refreshError?'RETRY':'ONLINE'}</span></div>
     <p className="small muted leaderboard-caption">Best saved score per player</p>
     <div className="leaderboard-scores">
       {status && <p className="muted leaderboard-status" role="status">{status}</p>}

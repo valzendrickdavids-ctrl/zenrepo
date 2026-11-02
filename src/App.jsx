@@ -303,20 +303,8 @@ export default function App({initialNotice=''}) {
     {resetOpen&&<Modal title="Reset game progress?" onClose={cancelReset} confirmOnEnter><p>Reset your progress and saved scores? You will return to Level 1 with zero points.</p>{resetError&&<p role="alert">{resetError}</p>}<button className="button full danger" data-confirm-action aria-keyshortcuts="Enter" disabled={resetting} onClick={resetProgress}>{resetting?'Resetting…':'Reset progress'}</button><button className="button secondary full" disabled={resetting} onClick={cancelReset}>Keep my progress</button></Modal>}
   </div>;
 }
-function homeLeaderboardPageSize(){
-  const {innerWidth:width,innerHeight:height}=window;
-  if(width<600)return height<=620?1:2;
-  if(width>=1000&&height<=700)return 2;
-  return height>820?5:height>700?3:4;
-}
 function Home({user,loaded,run,savedRuns,start,resume,profileName,scoreRefresh}) {
   const [difficulty,setDifficulty]=useState(run?.difficulty||'easy'),[confirm,setConfirm]=useState(false);
-  const [pageSize,setPageSize]=useState(homeLeaderboardPageSize);
-  useEffect(()=>{
-    const update=()=>setPageSize(homeLeaderboardPageSize());
-    window.addEventListener('resize',update);
-    return()=>window.removeEventListener('resize',update);
-  },[]);
   const mode=difficulties[difficulty],savedRun=user&&loaded&&savedRuns[difficulty],completedRun=savedRun&&savedRun.phase==='complete';
   return <main className="home home-menu" aria-label="Main menu">
     <section className="menu-identity"><img className="menu-logo" src="./game-artwork.png" alt="Clear & Conquer game logo"/><div><h1>Clear <em>&</em> Conquer</h1><p className="intro">One wipe, more guess — less stress, more success.</p></div></section>
@@ -326,7 +314,7 @@ function Home({user,loaded,run,savedRuns,start,resume,profileName,scoreRefresh})
       <div className="menu-play-actions"><button disabled={!loaded} className="button primary" onClick={()=>savedRun&&savedRun.phase!=='complete'?setConfirm(true):start(difficulty)}>Play {mode.label} <ArrowRight size={17}/></button>{savedRun&&<button className="button secondary" onClick={()=>resume(difficulty)}>{completedRun?'View results':'Resume'}</button>}</div>
       <p className="menu-resume-note" aria-hidden={!savedRun||undefined}>{savedRun&&<>{completedRun?'Completed':'Saved'} {difficulties[savedRun.difficulty].label} · {!completedRun&&<>clue {savedRun.index+1}/{savedRun.order.length} · </>}{savedRun.score.toLocaleString()} pts</>}</p>
     </section>
-    <Leaderboard key={difficulty} difficulty={difficulty} refresh={profileName+':'+scoreRefresh} visibleRows={pageSize}/></div>
+    <Leaderboard key={difficulty} difficulty={difficulty} refresh={profileName+':'+scoreRefresh}/></div>
     {confirm&&<Modal title="Start a fresh run?" onClose={()=>setConfirm(false)} confirmOnEnter><p>This replaces your unfinished {mode.label} run. Saved runs in other difficulties and your leaderboard scores stay saved.</p><button className="button primary full" data-confirm-action aria-keyshortcuts="Enter" onClick={()=>{setConfirm(false);start(difficulty);}}>Start new run</button><button className="button secondary full" onClick={()=>setConfirm(false)}>Keep current run</button></Modal>}
   </main>;
 }
@@ -337,12 +325,6 @@ function CompletionPreview({user,playerName}){
 function Game({user,run,update,onQuit,preview=false}) {
   const guessInput=useRef(null);
   const [guess,setGuess]=useState(''),[feedback,setFeedback]=useState(''),[scoreStatus,setScoreStatus]=useState(''),[saving,setSaving]=useState(false),[refresh,setRefresh]=useState(0);
-  const [completionPageSize,setCompletionPageSize]=useState(homeLeaderboardPageSize);
-  useEffect(()=>{
-    if(run.phase!=='complete')return;
-    const resize=()=>setCompletionPageSize(homeLeaderboardPageSize());resize();
-    window.addEventListener('resize',resize);return()=>window.removeEventListener('resize',resize);
-  },[run.phase]);
   const level=levels.find(l=>l.id===run.order[run.index]), d=difficulties[run.difficulty];
   const revealed=run.phase==='playing'&&run.brushing.active?run.brushing.stroke.length/TOTAL_CELLS*100:0;
   const brushLimitPercent=STROKE_LIMIT/TOTAL_CELLS*100;
@@ -371,7 +353,7 @@ function Game({user,run,update,onQuit,preview=false}) {
   }
   function next() {update(r=>r.index+1===r.order.length?{...r,phase:'complete',deadline:null}:{...r,index:r.index+1,phase:'playing',brushing:emptyBrush(),remaining:d.seconds,deadline:Date.now()+d.seconds*1000});}
   async function publish() {setSaving(true);try{await submitScore(user,run);setScoreStatus('Score saved!');setRefresh(n=>n+1);}catch(e){setScoreStatus(e.message);}finally{setSaving(false);}}
-  if(run.phase==='complete')return <main className="results play-results" style={{'--mode':d.color}}><div className="panel result"><div className="completion-award"><CompletionAward difficulty={run.difficulty} playerName={user.name||'Player'}/></div><div className="completion-score"><p className="big-score">{run.score.toLocaleString()} <small>points</small></p><p>{run.correct} correct out of {run.order.length} clues · {d.label}</p></div><div className="completion-actions"><button disabled={preview||saving||scoreStatus==='Score saved!'} className="button primary" onClick={publish}>{saving?'Saving…':'Save leaderboard score'}</button><Link to="/home" className="button secondary">Choose another category</Link></div><p className="completion-save-status" role="status">{scoreStatus}</p></div>{preview?<section className="panel leaderboard"><h2>{d.label} leaderboard</h2><p className="small muted">Preview only. No leaderboard score is submitted.</p></section>:<Leaderboard key={user.name} difficulty={run.difficulty} refresh={refresh} visibleRows={completionPageSize}/>}</main>;
+  if(run.phase==='complete')return <main className="results play-results" style={{'--mode':d.color}}><div className="panel result"><div className="completion-award"><CompletionAward difficulty={run.difficulty} playerName={user.name||'Player'}/></div><div className="completion-score"><p className="big-score">{run.score.toLocaleString()} <small>points</small></p><p>{run.correct} correct out of {run.order.length} clues · {d.label}</p></div><div className="completion-actions"><button disabled={preview||saving||scoreStatus==='Score saved!'} className="button primary" onClick={publish}>{saving?'Saving…':'Save leaderboard score'}</button><Link to="/home" className="button secondary">Choose another category</Link></div><p className="completion-save-status" role="status">{scoreStatus}</p></div>{preview?<section className="panel leaderboard"><h2>{d.label} leaderboard</h2><p className="small muted">Preview only. No leaderboard score is submitted.</p></section>:<Leaderboard key={user.name} difficulty={run.difficulty} refresh={refresh}/>}</main>;
   return <main className="game" style={{'--mode':d.color}}><header className="game-heading"><div className="game-heading-identity"><img className="game-mark" src="./game-artwork.png" alt="Clear & Conquer game logo"/><div><span className="eyebrow">CLUE {String(run.index+1).padStart(2,'0')} / {run.order.length}</span><h1>What do you see?</h1></div></div><div className="game-heading-actions"><span className="mode-pill">{d.label} · {d.multiplier}×</span><button type="button" className="button secondary quit-game" aria-haspopup="dialog" onClick={onQuit}>Save & quit</button></div></header>
     <div className="game-grid"><section className="play-visual" aria-label="Visual clue and brushing controls"><div className="panel clue-panel"><div className="hud"><div><Clock size={17}/><strong className={run.remaining<10?'urgent':''}>{Math.ceil(run.remaining)}s</strong><span>remaining</span></div><div className="reveal-hud"><div className="reveal-readout"><Eraser size={17}/><strong>{revealed.toFixed(1)}%</strong><span>revealed</span></div><progress className="brush-usage" aria-label="Brush usage for current attempt" aria-valuetext={`${revealed.toFixed(1)}% of ${brushLimitPercent}% maximum per attempt`} value={revealed} max={brushLimitPercent}/></div><div><Trophy size={17}/><strong>{run.score.toLocaleString()}</strong><span>points</span></div></div>
       <div className={'attempt-hud '+(remainingAttempts===0?'urgent':'')} role="status"><strong data-testid="attempts">{remainingAttempts}</strong> / {d.attempts} brushes left <span>7% per stroke · covers after 2s</span></div>
