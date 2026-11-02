@@ -4,9 +4,7 @@ export const difficulties = {
   medium: { label: 'Moderate', seconds: 40, brush: 18, attempts: 6, multiplier: 1.5, color: '#c46a12' },
   hard: { label: 'Expert', seconds: 25, brush: 12, attempts: 5, multiplier: 2, color: '#d54754' },
 };
-// The catalog's official spelling and case are the required naming convention.
-export const matches = (level, guess) => typeof level?.answer === 'string' && typeof guess === 'string' && guess === level.answer;
-export const answerPattern = answer => answer.replace(/\p{Lu}/gu, 'A').replace(/\p{Ll}/gu, 'a').replace(/\p{Nd}/gu, '0');
+export {matches,answerPattern,answerGuidance} from './answerRules.js';
 export function points(secondsRemaining, difficulty) {
   const mode=difficulties[difficulty];
   if(!mode||!Number.isFinite(secondsRemaining)||secondsRemaining<=0)return 0;

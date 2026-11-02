@@ -55,11 +55,16 @@ protects the signed-in player's current run when cloud synchronization fails.
   ignored without spending an attempt. No brushing is allowed at zero attempts.
 - Pointer/touch input and a focused-board Space-key patch are supported.
 - A centered hint appears below every stage image.
-- Answers must match the official spelling, capitalization, spaces and punctuation
-  exactly. Synonyms and variations are rejected.
+- All modes keep the naming convention: accepted answers and alternatives retain
+  their required spelling/capitalization. Begin an alternative or partial answer
+  with a capital letter and keep acronym names uppercase (for example CPU, HDD).
+- Beginner accepts catalog synonyms, partial answers, abbreviations and extra
+  spaces. Moderate accepts catalog synonyms and partial answers, requires single
+  spaces, and excludes abbreviation alternatives. Partial answers need at least
+  three letters/digits. Expert accepts only the complete official answer exactly.
 - Correct-answer points: round(1000 x remaining-time fraction x multiplier), with
   at least 1 point for a correct answer before the deadline. Maximums per clue:
-  1000 / 1500 / 2000. Wrong guesses subtract 100 points, with a zero floor. Timeout
+  1000 / 1500 / 2000. Wrong guesses do not deduct points. Timeout
   earns zero. The round result shows earned points, total points, answer and fact.
 - The timer runs during recovery/settings. Save & quit pauses after confirmation.
 - Finish a category for its appreciation screen and unique trophy. Choose Save
@@ -106,6 +111,9 @@ by the database. The remaining anti-cheat limits are documented below.
 
 Old dated migrations are history. For this release, apply the current consolidated
 schema or the latest upgrade; do not run older provider migrations afterward.
+The answer-rules upgrade is `supabase/migrations/202611020001_difficulty_answer_rules.sql`.
+Apply it before publishing this frontend. Old answer-history events retain their
+original strict scoring; new events use rulesVersion 2 with no wrong-answer penalty.
 
 ## Latest verification
 

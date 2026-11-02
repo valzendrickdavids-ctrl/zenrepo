@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Navigate, Route, Routes, useNavigate, useLocation, Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Trophy, Clock, Eraser, Sun, Moon, Settings, Maximize, Minimize } from 'lucide-react';
 import { supabase } from './lib/supabase.js';
-import { difficulties, newRun, validRun, matches, answerPattern, points } from './lib/engine.js';
+import { difficulties, newRun, validRun, matches, answerPattern, answerGuidance, points } from './lib/engine.js';
 import { cacheRun, loadRun, readLocal, writeLocal, saveCloud, submitScore } from './lib/storage.js';
 import { levels } from './data/levels.js';
 import ScratchCanvas from './components/PrecisionCanvas.jsx';
@@ -325,7 +325,7 @@ function CompletionPreview({user,playerName}){
 function Game({user,run,update,onQuit,preview=false}) {
   const guessInput=useRef(null);
   const [guess,setGuess]=useState(''),[feedback,setFeedback]=useState(''),[scoreStatus,setScoreStatus]=useState(''),[saving,setSaving]=useState(false),[refresh,setRefresh]=useState(0);
-  const level=levels.find(l=>l.id===run.order[run.index]), d=difficulties[run.difficulty];
+  const level=levels.find(l=>l.id===run.order[run.index]), d=difficulties[run.difficulty], rules=answerGuidance(run.difficulty);
   const revealed=run.phase==='playing'&&run.brushing.active?run.brushing.stroke.length/TOTAL_CELLS*100:0;
   const brushLimitPercent=STROKE_LIMIT/TOTAL_CELLS*100;
   const remainingAttempts=d.attempts-run.brushing.used;
@@ -349,7 +349,7 @@ function Game({user,run,update,onQuit,preview=false}) {
       const earned=points(secondsRemaining,run.difficulty);
       audio.effect('correct');
       update(r=>r.phase==='playing'&&r.order[r.index]===level.id?{...recordScoreAnswer(r,guess,secondsRemaining),phase:'answered',outcome:'correct',score:r.score+earned,correct:r.correct+1,earned,remaining,deadline:null}:r);
-    }else{if(guessInput.current&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){guessInput.current.getAnimations().forEach(animation=>animation.cancel());guessInput.current.animate([{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(-2px)'},{transform:'translateX(0)'}],{duration:240,easing:'ease-out'});}audio.effect('wrong');update(r=>r.phase==='playing'&&r.order[r.index]===level.id?{...recordScoreAnswer(r,guess,secondsRemaining),score:Math.max(0,r.score-100)}:r);setFeedback(`Incorrect — match the exact spelling, case, spaces and punctuation. Format: ${answerPattern(level.answer)}. −100 points (minimum score: 0).`);}
+    }else{if(guessInput.current&&!window.matchMedia('(prefers-reduced-motion: reduce)').matches){guessInput.current.getAnimations().forEach(animation=>animation.cancel());guessInput.current.animate([{transform:'translateX(0)'},{transform:'translateX(-4px)'},{transform:'translateX(4px)'},{transform:'translateX(-2px)'},{transform:'translateX(0)'}],{duration:240,easing:'ease-out'});}audio.effect('wrong');update(r=>r.phase==='playing'&&r.order[r.index]===level.id?recordScoreAnswer(r,guess,secondsRemaining):r);setFeedback(`Incorrect. Check the ${d.label} answer rules and naming convention below. No points deducted.${run.difficulty==='hard'?` Required format: ${answerPattern(level.answer)}.`:''}`);}
   }
   function next() {update(r=>r.index+1===r.order.length?{...r,phase:'complete',deadline:null}:{...r,index:r.index+1,phase:'playing',brushing:emptyBrush(),remaining:d.seconds,deadline:Date.now()+d.seconds*1000});}
   async function publish() {setSaving(true);try{await submitScore(user,run);setScoreStatus('Score saved!');setRefresh(n=>n+1);}catch(e){setScoreStatus(e.message);}finally{setSaving(false);}}
@@ -361,13 +361,13 @@ function Game({user,run,update,onQuit,preview=false}) {
       </div>
       <p className="stage-hint"><strong>Hint:</strong> {level.hint}</p>
     </section><aside className="game-answer-area" aria-label="Answer and round information">
-      {run.phase==='playing'?<form className="panel guess-form answer-panel" onSubmit={answer}><span className="eyebrow">{level.category}</span><label htmlFor="guess">Your best guess</label><p className="game-prompt muted">Brush a little, look closely, then name the object or concept.</p><div className="guess-controls"><input ref={guessInput} id="guess" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} aria-describedby="answer-rules guess-feedback" aria-invalid={Boolean(feedback)} value={guess} onChange={e=>{setGuess(e.target.value);setFeedback('');}} placeholder="Type the exact answer…" maxLength="100" required/><button className="button primary full">Guess <ArrowRight size={18}/></button></div><p id="guess-feedback" className="small guess-feedback" role="status">{feedback}</p><p className="small muted game-mode-note">{d.seconds} seconds · {d.multiplier}× points</p></form>:<section className={"panel fact answer-panel"+(run.outcome==='correct'?' correct-answer':'')} aria-label="Round result">
+      {run.phase==='playing'?<form className="panel guess-form answer-panel" onSubmit={answer}><span className="eyebrow">{level.category}</span><label htmlFor="guess">Your best guess</label><p className="game-prompt muted">Brush a little, look closely, then name the object or concept.</p><div className="guess-controls"><input ref={guessInput} id="guess" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} aria-describedby="answer-rules guess-feedback" aria-invalid={Boolean(feedback)} value={guess} onChange={e=>{setGuess(e.target.value);setFeedback('');}} placeholder={rules.placeholder} maxLength="100" required/><button className="button primary full">Guess <ArrowRight size={18}/></button></div><p id="guess-feedback" className="small guess-feedback" role="status">{feedback}</p><p className="small muted game-mode-note">{d.seconds} seconds · {d.multiplier}× points</p></form>:<section className={"panel fact answer-panel"+(run.outcome==='correct'?' correct-answer':'')} aria-label="Round result">
         <span className="eyebrow round-outcome">{run.outcome==='correct'&&<CheckCircle2 className="correct-check" size={18} aria-hidden="true"/>}{run.outcome==='correct'?'NICELY SPOTTED!':'TIME’S UP — A NEW THING LEARNED'}</span>
         <p className={'round-points'+(run.outcome==='correct'?'':' is-timeout')} role="status"><strong>{run.outcome==='correct'?'+'+(run.earned??0).toLocaleString():'0'}</strong><span>points earned this round</span></p>
         <p className="round-total">Total score: <strong>{run.score.toLocaleString()}</strong> points</p>
         <h2>{level.answer}</h2><h3>Did you know?</h3><p>{level.fact}</p><a href={level.source} target="_blank" rel="noreferrer">Explore this concept ↗</a><button className="button primary full" onClick={next}>{run.index+1===run.order.length?'See your results':'Next discovery'} <ArrowRight size={18}/></button>
       </section>}
-      <div className="game-notes"><p>Scratch with mouse or touch. Hold and release Space on the image to brush with the keyboard.</p><p id="answer-rules" className="answer-rules"><strong>Exact match only:</strong> use the official spelling, capitalization, spaces and punctuation. No synonyms or variations.<span>Required format: <code>{answerPattern(level.answer)}</code> <small>(A = uppercase, a = lowercase, 0 = digit)</small></span></p></div>
+      <div className="game-notes"><p>Scratch with mouse or touch. Hold and release Space on the image to brush with the keyboard.</p><p id="answer-rules" className="answer-rules"><strong>{rules.title}</strong> {rules.description}{run.difficulty==='hard'&&<span>Required format: <code>{answerPattern(level.answer)}</code> <small>(A = uppercase, a = lowercase, 0 = digit)</small></span>}<span>Wrong answers do not deduct points.</span></p></div>
     </aside></div>
   </main>;
 }

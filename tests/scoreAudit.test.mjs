@@ -11,8 +11,15 @@ test('new ranked runs have a zero baseline and immutable, exact answer records',
  const wrong=recordScoreAnswer(run,answer,52.123);
  assert.equal(run.scoreAudit.events.length,0);assert.equal(wrong.scoreAudit.events[0].guess,answer);
  const timeout=recordScoreAnswer(wrong,null,0);assert.equal(wrong.scoreAudit.events.length,1);
- assert.deepEqual(timeout.scoreAudit.events[1],{index:0,guess:null,remaining:0});
+ assert.deepEqual(timeout.scoreAudit.events[1],{index:0,guess:null,remaining:0,rulesVersion:2});
  assert.deepEqual(run.scoreAudit,{version:1,baseIndex:0,baseScore:0,baseCorrect:0,events:[]});
+});
+test('resuming a run keeps old rule records and marks only new answers with version 2',()=>{
+ const run=newRun(levels,'easy');run.scoreAudit.events=[{index:0,guess:'wrong',remaining:55}];
+ const next=recordScoreAnswer(run,'Keyboard',50);
+ assert.deepEqual(next.scoreAudit.events[0],{index:0,guess:'wrong',remaining:55});
+ assert.equal(next.scoreAudit.events[1].rulesVersion,2);
+ assert.equal(run.scoreAudit.events.length,1);
 });
 test('legacy saves keep a starting baseline without inventing past answers',()=>{
  const old={...newRun(levels,'easy'),index:4,score:1700,correct:3};delete old.scoreAudit;

@@ -1,3 +1,4 @@
+import {ANSWER_RULES_VERSION} from './answerRules.js';
 // Keep answer history with the run so an offline retry can be checked by the server.
 export function withScoreAudit(run) {
   if(!run||run.scoreAudit)return run;
@@ -5,7 +6,7 @@ export function withScoreAudit(run) {
 }
 export function recordScoreAnswer(run,guess,remaining) {
   const next=withScoreAudit(run);
-  return {...next,scoreAudit:{...next.scoreAudit,events:[...next.scoreAudit.events,{index:next.index,guess,remaining:Math.round(remaining*1000)/1000}]}};
+  return {...next,scoreAudit:{...next.scoreAudit,events:[...next.scoreAudit.events,{index:next.index,guess,remaining:Math.round(remaining*1000)/1000,rulesVersion:ANSWER_RULES_VERSION}]}};
 }
 export function scoreSnapshot(run) {
   const snapshot={id:run.id,difficulty:run.difficulty,score:run.score};

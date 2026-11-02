@@ -27,14 +27,26 @@ test('expired and invalid timers cannot earn points; live rewards stay within th
   }
   assert.equal(points(30,'unknown'),0);
 });
-test('only the exact official answer is accepted, with no normalization or synonyms',()=>{
-  const cpu=levels.find(l=>l.id==='cpu'),usb=levels.find(l=>l.id==='usb-drive'),wifi=levels.find(l=>l.id==='wifi');
-  assert.ok(matches(cpu,'CPU'));
-  for(const guess of ['cpu','Cpu',' CPU','CPU ','C P U','Central Processing Unit','CP','CPU device','C\u0420U',null,undefined,42,['CPU'],new String('CPU')])assert.equal(matches(cpu,guess),false,String(guess));
-  assert.ok(matches(usb,'USB flash drive'));
-  for(const guess of ['USB flash-drive','USB Flash Drive','USB  flash drive','USB\tflash drive','USB drive'])assert.equal(matches(usb,guess),false,guess);
-  assert.ok(matches(wifi,'Wi-Fi'));
-  for(const guess of ['WiFi','wi-fi','Wi‑Fi','Wi Fi'])assert.equal(matches(wifi,guess),false,guess);
+test('Beginner accepts named synonyms, partials, abbreviations and extra spaces',()=>{
+  const cpu=levels.find(l=>l.id==='cpu'),usb=levels.find(l=>l.id==='usb-drive'),disk=levels.find(l=>l.id==='hard-drive');
+  for(const guess of ['CPU',' CPU ','Processor','Central processing unit','Central   processing\tunit'])assert.ok(matches(cpu,guess),guess);
+  for(const guess of ['USB flash drive','Flash drive','USB  flash drive','USB\tflash drive','USB drive','Drive','UFD'])assert.ok(matches(usb,guess),guess);
+  for(const guess of ['HDD','HD','Hard disk','Hard'])assert.ok(matches(disk,guess),guess);
+  for(const guess of ['cpu','Cpu','processor','Central Processing Unit','CP','CPU device','C\u0420U',null,undefined,42,['CPU'],new String('CPU')])assert.equal(matches(cpu,guess),false,String(guess));
+});
+test('Moderate accepts named synonyms and partials but rejects abbreviation alternatives and extra spaces',()=>{
+  const variable=levels.find(l=>l.id==='variable'),vm=levels.find(l=>l.id==='virtual-machine'),html=levels.find(l=>l.id==='html');
+  for(const guess of ['Variable','Program variable','Program','Vari'])assert.ok(matches(variable,guess),guess);
+  for(const guess of ['variable','PROGRAM VARIABLE',' Variable','Variable ','Program  variable','Program\tvariable','va'])assert.equal(matches(variable,guess),false,guess);
+  assert.ok(matches(vm,'Virtual machine'));assert.ok(matches(vm,'Machine'));assert.equal(matches(vm,'VM'),false);
+  assert.ok(matches(html,'HTML'));assert.ok(matches(html,'Hypertext markup language'));assert.equal(matches(html,'html'),false);
+  assert.equal(matches(levels.find(l=>l.id==='javascript'),'JS'),false);
+  assert.equal(matches(levels.find(l=>l.id==='boolean'),'Bool'),false);
+});
+test('Expert keeps exact spelling, case, spaces and punctuation',()=>{
+  const search=levels.find(l=>l.id==='breadth-first-search');
+  assert.ok(matches(search,'Breadth-first search'));
+  for(const guess of ['BFS','bfs','Breadth','Search','Breadth first search','breadth-first search',' Breadth-first search','Breadth-first  search'])assert.equal(matches(search,guess),false,guess);
   assert.equal(matches({answer:'Caf\u00e9'},'Cafe\u0301'),false);
   assert.equal(matches({},''),false);
 });

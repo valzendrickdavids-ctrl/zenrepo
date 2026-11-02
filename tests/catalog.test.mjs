@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { levels, poolCounts } from '../src/data/levels.js';
 import { newRun, validRun, matches } from '../src/lib/engine.js';
 import { hints } from '../src/data/hints.js';
+import {answerOptions,cleanAnswerSpaces,namedAlias} from '../src/lib/answerRules.js';
 test('every clue has a specific hint without its answer or aliases',()=>{
  assert.equal(Object.keys(hints).length,225);
  for(const [mode,count] of Object.entries(poolCounts)){
@@ -36,13 +37,16 @@ test('cross-mode and old-library saves are rejected',()=>{
  assert.equal(Boolean(validRun({...r,order},levels)),false);
  assert.equal(Boolean(validRun({...r,version:2},levels)),false);
 });
-test('all 225 stages accept only their official answer and reject every alternate variation',()=>{
+test('all 225 stages preserve their naming convention and difficulty-specific alternatives',()=>{
  for(const l of levels){
   assert.ok(matches(l,l.answer),l.id);
-  for(const a of l.aliases)assert.equal(matches(l,a),a===l.answer,l.id+': '+a);
-  const variants=[l.answer.toLowerCase(),l.answer.toUpperCase(),' '+l.answer,l.answer+' ',l.answer+' extra',l.answer.slice(0,-1),l.answer.replace(/ /g,'  '),l.answer.replace(/[ -]/g,'')];
-  for(const guess of variants)if(guess!==l.answer)assert.equal(matches(l,guess),false,l.id+': '+guess);
+  assert.equal(matches(l,l.answer.toLowerCase()),false,l.id+': capitalization');
+  assert.equal(matches(l,' '+l.answer+'  '),l.difficulty==='easy',l.id+': spacing');
+  const {blocked}=answerOptions(l);
+  for(const alias of l.aliases){const named=namedAlias(alias);assert.equal(matches(l,named),l.difficulty==='hard'?named===l.answer:!blocked.includes(named)||l.difficulty==='easy',l.id+': '+named);}
+  if(l.difficulty==='hard')for(const guess of [l.answer.toUpperCase(),l.answer+' extra',l.answer.slice(0,-1),l.answer.replace(/ /g,'  '),l.answer.replace(/[ -]/g,'')])if(guess!==l.answer)assert.equal(matches(l,guess),false,l.id+': '+guess);
  }
+ assert.equal(cleanAnswerSpaces(' \tUSB  flash\ndrive '),'USB flash drive');
  assert.equal(matches(levels.find(l=>l.id==='a-star'),'a'),false);
 });
 
