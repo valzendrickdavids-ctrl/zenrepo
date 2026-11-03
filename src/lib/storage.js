@@ -50,10 +50,10 @@ export async function submitScore(user, run) {
 export async function leaderboard(difficulty,signal) {
   if (!validDifficulty(difficulty)) throw new Error('Choose a difficulty to see its leaderboard.');
   if (!supabase) throw Error('Online leaderboard is unavailable until account setup is complete.');
-  let request=supabase.from('leaderboard_by_difficulty').select('display_name,best_score').eq('difficulty',difficulty).order('best_score', { ascending: false }).order('display_name').limit(20);
+  let request=supabase.rpc('leaderboard_players',{p_difficulty:difficulty});
   if(signal)request=request.abortSignal(signal);
   const { data, error } = await request;
-  if (error) throw new Error('Leaderboard unavailable. Check your connection and run the updated supabase.sql.');
+  if (error||!Array.isArray(data)) throw new Error('Leaderboard unavailable. Check your connection and run the updated supabase.sql.');
   return data;
 }
 

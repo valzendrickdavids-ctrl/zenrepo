@@ -86,7 +86,7 @@ export default function PlayerProfile({user,profile,loading,error,onRetry,onSave
           <fieldset className="avatar-options"><legend>Choose your avatar or photo</legend><div className="avatar-grid">{Object.entries(AVATARS).filter(([key])=>key!=='rocket').map(([key,emoji])=><button type="button" key={key} aria-label={`${key} avatar`} aria-pressed={current.avatar===key} onClick={()=>update('avatar',key)}>{emoji}</button>)}<button type="button" className="photo-avatar-option" aria-label="Upload profile photo" aria-pressed={current.avatar==='rocket'&&Boolean(current.avatar_image)} onClick={()=>photoInput.current?.click()}>{current.avatar_image?<img src={current.avatar_image} alt=""/>:<ImagePlus size={23} aria-hidden="true"/>}</button></div><input ref={photoInput} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Choose profile image" hidden onChange={choosePhoto}/></fieldset>
           {photoBusy&&<p className="small muted" role="status">Saving your photo…</p>}
           {photoError&&<p className="small urgent" role="alert">{photoError}</p>}
-          <p className="small muted profile-privacy">Only your in-game name appears on leaderboards. Age and sex are private to your account.</p>
+          <p className="small muted profile-privacy">Your in-game name and selected avatar or photo appear on leaderboards. Age and sex are private to your account.</p>
         </fieldset>
       </form>
       <p className={'profile-save-status small '+(saveState.kind==='error'?'urgent':'muted')} role={saveState.kind==='error'?'alert':'status'} aria-live="polite">{statusText||'Changes save automatically.'}</p>

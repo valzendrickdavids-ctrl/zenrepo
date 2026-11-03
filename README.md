@@ -69,6 +69,9 @@ protects the signed-in player's current run when cloud synchronization fails.
 - The timer runs during recovery/settings. Save & quit pauses after confirmation.
 - Finish a category for its appreciation screen and unique trophy. Choose Save
   leaderboard score to submit. Beginner, Moderate and Expert boards stay separate.
+- Leaderboards show five visible rows, with more scores available by scrolling.
+  The top three use medals; later ranks are centered numbers. Each in-game name
+  is preceded by the player's selected avatar/photo. Age and sex remain private.
 - Settings includes audio, appearance, tutorial, progress reset and feedback.
   Reset, quit and sign-out have confirmations; saved scores belong to the account.
 
@@ -114,6 +117,10 @@ schema or the latest upgrade; do not run older provider migrations afterward.
 The answer-rules upgrade is `supabase/migrations/202611020001_difficulty_answer_rules.sql`.
 Apply it before publishing this frontend. Old answer-history events retain their
 original strict scoring; new events use rulesVersion 2 with no wrong-answer penalty.
+The leaderboard-avatar upgrade is `supabase/migrations/202611030001_leaderboard_profiles.sql`.
+Apply it before publishing the avatar-enabled leaderboard. The authenticated-only
+lookup returns the top 20 names/scores and selected avatars/photos for one difficulty;
+it does not change direct access to private profile or photo tables.
 
 ## Latest verification
 

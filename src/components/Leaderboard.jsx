@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { leaderboard } from '../lib/storage.js';
 import { difficulties } from '../lib/engine.js';
 import { watchLeaderboard } from '../lib/leaderboardRefresh.js';
+import LeaderboardAvatar from './LeaderboardAvatar.jsx';
 const medals = [
   { symbol:'🥇', label:'1st place — Gold medal' },
   { symbol:'🥈', label:'2nd place — Silver medal' },
@@ -11,7 +12,7 @@ function Rank({place}) {
   const medal=medals[place-1];
   return medal
     ? <span className="rank rank-medal" role="img" aria-label={medal.label} title={medal.label}>{medal.symbol}</span>
-    : <span className="rank">{String(place).padStart(2,'0')}</span>;
+    : <span className="rank">{place}</span>;
 }
 export default function Leaderboard({ difficulty, refresh=0 }) {
   const [rows,setRows]=useState([]), [status,setStatus]=useState('Loading scores…');
@@ -30,7 +31,7 @@ export default function Leaderboard({ difficulty, refresh=0 }) {
     <p className="small muted leaderboard-caption">Best saved score per player</p>
     <div className="leaderboard-scores">
       {status && <p className="muted leaderboard-status" role="status">{status}</p>}
-      {rows.length>0&&<ol className="leaderboard-list" tabIndex={0} aria-label={`${mode.label} player rankings`}>{rows.map((r,i)=><li key={i}><Rank place={i+1}/><span title={r.display_name}>{r.display_name}</span><strong>{r.best_score.toLocaleString()}</strong></li>)}</ol>}
+      {rows.length>0&&<ol className="leaderboard-list" tabIndex={0} aria-label={`${mode.label} player rankings`}>{rows.map((r,i)=><li key={i}><Rank place={i+1}/><LeaderboardAvatar avatar={r.avatar} image={r.avatar_image}/><span className="leaderboard-player-name" title={r.display_name}>{r.display_name}</span><strong>{r.best_score.toLocaleString()}</strong></li>)}</ol>}
     </div>
   </section>;
 }
