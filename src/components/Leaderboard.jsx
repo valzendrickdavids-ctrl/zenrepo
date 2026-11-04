@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { leaderboard } from '../lib/storage.js';
 import { difficulties } from '../lib/engine.js';
 import { watchLeaderboard } from '../lib/leaderboardRefresh.js';
+import { attachLeaderboardScrolling } from '../lib/leaderboardScrolling.js';
 import LeaderboardAvatar from './LeaderboardAvatar.jsx';
 const medals = [
   { symbol:'🥇', label:'1st place — Gold medal' },
@@ -18,6 +19,8 @@ export default function Leaderboard({ difficulty, refresh=0 }) {
   const [rows,setRows]=useState([]), [status,setStatus]=useState('Loading scores…');
   const [refreshError,setRefreshError]=useState('');
   const previous=useRef({difficulty,rows:[]});
+  const panel=useRef(null), list=useRef(null);
+  useEffect(()=>attachLeaderboardScrolling(panel.current,list.current),[difficulty,rows.length]);
   useEffect(()=>{
     if(previous.current.difficulty!==difficulty){previous.current={difficulty,rows:[]};setRows([]);setStatus('Loading scores…');setRefreshError('');}
     return watchLeaderboard({
@@ -27,11 +30,11 @@ export default function Leaderboard({ difficulty, refresh=0 }) {
     });
   },[difficulty,refresh]);
   const mode=difficulties[difficulty];
-  return <section className="panel leaderboard" aria-label={`${mode.label} leaderboard`} style={{'--mode':mode.color,'--leaderboard-visible-rows':5}}><div className="row spread"><h2>{mode.label} leaderboard</h2><span className="eyebrow" role="status" title={refreshError?'Scores could not refresh. Retrying automatically.':'Scores refresh automatically every 10 seconds.'} aria-label={refreshError?'Leaderboard update failed; retrying automatically':'Online leaderboard; updates automatically'}>{refreshError?'RETRY':'ONLINE'}</span></div>
+  return <section ref={panel} className="panel leaderboard" data-scrollable={rows.length>5} aria-label={`${mode.label} leaderboard`} style={{'--mode':mode.color,'--leaderboard-visible-rows':5}}><div className="row spread"><h2>{mode.label} leaderboard</h2><span className="eyebrow" role="status" title={refreshError?'Scores could not refresh. Retrying automatically.':'Scores refresh automatically every 10 seconds.'} aria-label={refreshError?'Leaderboard update failed; retrying automatically':'Online leaderboard; updates automatically'}>{refreshError?'RETRY':'ONLINE'}</span></div>
     <p className="small muted leaderboard-caption">Best saved score per player</p>
     <div className="leaderboard-scores">
       {status && <p className="muted leaderboard-status" role="status">{status}</p>}
-      {rows.length>0&&<ol className="leaderboard-list" tabIndex={0} aria-label={`${mode.label} player rankings`}>{rows.map((r,i)=><li key={i}><Rank place={i+1}/><LeaderboardAvatar avatar={r.avatar} image={r.avatar_image}/><span className="leaderboard-player-name" title={r.display_name}>{r.display_name}</span><strong>{r.best_score.toLocaleString()}</strong></li>)}</ol>}
+      {rows.length>0&&<ol ref={list} className="leaderboard-list" tabIndex={0} aria-label={`${mode.label} player rankings`}>{rows.map((r,i)=><li key={i}><Rank place={i+1}/><LeaderboardAvatar avatar={r.avatar} image={r.avatar_image}/><span className="leaderboard-player-name" title={r.display_name}>{r.display_name}</span><strong>{r.best_score.toLocaleString()}</strong></li>)}</ol>}
     </div>
   </section>;
 }

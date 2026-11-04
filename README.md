@@ -70,6 +70,9 @@ protects the signed-in player's current run when cloud synchronization fails.
 - Finish a category for its appreciation screen and unique trophy. Choose Save
   leaderboard score to submit. Beginner, Moderate and Expert boards stay separate.
 - Leaderboards show five visible rows, with more scores available by scrolling.
+  Padding is equal on all sides, the scrollbar stays hidden, and wheel/touch
+  scrolling works across the whole panel. Keyboard scrolling and reduced-motion
+  preferences are supported on both the main menu and completion screen.
   The top three use medals; later ranks are centered numbers. Each in-game name
   is preceded by the player's selected avatar/photo. Age and sex remain private.
 - Settings includes audio, appearance, tutorial, progress reset and feedback.
