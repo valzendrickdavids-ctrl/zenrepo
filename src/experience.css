@@ -136,9 +136,11 @@
 .home-shell{min-height:100svh;max-width:1100px;display:flex;flex-direction:column}
 .home-shell>.header{min-height:64px;padding:6px 0;flex-shrink:0}
 .menu-welcome{min-width:0;font-size:12px;line-height:1.4;gap:8px;color:var(--muted)}
-.home-shell .menu-welcome{animation:welcome-dismiss 3s linear forwards}
+.tutorial-shell .menu-welcome{flex:1;overflow:hidden}
+.tutorial-shell .menu-welcome>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+:is(.home-shell,.tutorial-shell) .menu-welcome{animation:welcome-dismiss 3s linear forwards}
 @keyframes welcome-dismiss{0%,90%{opacity:1}100%{opacity:0}}
-@media(prefers-reduced-motion:reduce){.home-shell .menu-welcome{animation:none}}
+@media(prefers-reduced-motion:reduce){:is(.home-shell,.tutorial-shell) .menu-welcome{animation:none}}
 .menu-welcome button{padding:2px 4px;border:0;background:transparent;color:var(--foreground);line-height:20px}
 .home-shell>.notice{flex-shrink:0;margin:6px 0 0;padding:8px 12px;font-size:12px;line-height:1.4}
 .home-shell>.home-menu{--menu-padding:28px;max-width:none;width:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-start;gap:28px;margin:0;padding:20px 0}

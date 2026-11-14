@@ -63,7 +63,7 @@ export default function App({initialNotice=''}) {
   const tutorialDone=Boolean(user&&(tutorialUser===user.id||readLocal(tutorialKey(user.id),false)));
   function finishTutorial(){writeLocal(tutorialKey(user.id),true);setTutorialUser(user.id);setTutorialRevision(n=>n+1);navigate('/home');}
   useEffect(()=>{
-    if(location.pathname!=='/home'||!user||!welcome)return;
+    if(!['/home','/tutorial'].includes(location.pathname)||!user||!welcome)return;
     const timer=setTimeout(()=>setWelcome(''),3000);
     return()=>clearTimeout(timer);
   },[location.pathname,user?.id,welcome]);
@@ -260,11 +260,11 @@ export default function App({initialNotice=''}) {
   if(!ready&&location.pathname!=='/')return <main className="loading">Opening Clear & Conquer…</main>;
   return <div className={'app-shell'+(location.pathname==='/auth'?' auth-shell':location.pathname==='/tutorial'?' tutorial-shell':location.pathname==='/home'?' home-shell':['/play','/complete'].includes(location.pathname)?' play-shell':location.pathname==='/'?' splash-shell':'')}>
     <AmbientBackground calm={location.pathname==='/play'&&run?.phase!=='complete'}/>
-    {location.pathname!=='/'&&<header className="header">{['/home','/play','/complete'].includes(location.pathname)&&user&&welcomeText?<div className="menu-welcome welcome-banner" role="status"><span>{welcome==='new'?'Welcome, explorer!':welcome==='returning'?`Welcome back, ${visibleName}!`:`Welcome, ${visibleName}!`}</span><button aria-label="Dismiss welcome" onClick={()=>setWelcome('')}>×</button></div>:<span aria-hidden="true"/>}
+    {location.pathname!=='/'&&<header className="header">{['/home','/tutorial','/play','/complete'].includes(location.pathname)&&user&&welcomeText?<div key={location.pathname+':'+welcome} className="menu-welcome welcome-banner" role="status"><span>{welcome==='new'?'Welcome, explorer!':welcome==='returning'?`Welcome back, ${visibleName}!`:`Welcome, ${visibleName}!`}</span><button aria-label="Dismiss welcome" onClick={()=>setWelcome('')}>×</button></div>:<span aria-hidden="true"/>}
       {location.pathname==='/auth'?<button className="profile-trigger" aria-label="Open game settings" onClick={openSettings}><span className="player-avatar" aria-hidden="true"><Settings size={23}/></span><span>Settings</span></button>:<button className="profile-trigger" aria-label={user?'Open your profile':'Open profile menu'} onClick={()=>setProfileOpen(true)}>
         <PlayerAvatar user={user} profile={visibleProfile}/><span>{visibleProfile?visibleName:'Profile'}</span>
       </button>}</header>}
-    {user&&welcomeText&&!['/home','/play','/complete'].includes(location.pathname)&&<div className="notice welcome-banner" role="status">{welcomeText}<button aria-label="Dismiss welcome" onClick={()=>setWelcome('')}>×</button></div>}
+    {user&&welcomeText&&!['/home','/tutorial','/play','/complete'].includes(location.pathname)&&<div className="notice welcome-banner" role="status">{welcomeText}<button aria-label="Dismiss welcome" onClick={()=>setWelcome('')}>×</button></div>}
     {notice&&<div className="notice" role="status">{notice}<button onClick={()=>setNotice('')} aria-label="Dismiss message">×</button></div>}
     {fullscreen.error&&!settings&&<div className="notice" role="status">{fullscreen.error}<button onClick={fullscreen.clearError} aria-label="Dismiss full screen message">×</button></div>}
     <Routes>
