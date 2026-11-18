@@ -43,6 +43,6 @@ export default function Auth(){
       {message&&<p className="auth-message" role="status">{message}</p>}
       <button className="button primary full" disabled={busy||!supabase}>{busy?'Please wait…':signup?'Create account':'Sign in'}</button>
     </fieldset></form>
-    <div className="auth-actions"><button type="button" className="text-button" disabled={busy} onClick={toggle}>{signup?'Already have an account? Sign in':'New here? Create an account'}</button><a className="text-button" href={`${import.meta.env.BASE_URL}about/`}>About Clear and Conquer</a></div>
+    <div className="auth-actions"><button type="button" className="text-button" disabled={busy} onClick={toggle}>{signup?'Already have an account? Sign in':'New here? Create an account'}</button></div>
   </section></main>;
 }
